@@ -39,7 +39,7 @@ export default function Login({ onLoggedIn, onSignup }: { onLoggedIn: () => void
         <p className="m-0 text-[15px] leading-relaxed text-muted">
           오늘 나에게 맞는 열람실 자리를
           <br />
-          골라드려요.
+          골라드려요. 테스트
         </p>
       </div>
 
