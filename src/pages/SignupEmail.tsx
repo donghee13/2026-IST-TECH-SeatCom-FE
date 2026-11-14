@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
-import { sendEmailCode, verifyEmailCode } from '../api'
+import { login, sendEmailCode, signup, verifyEmailCode } from '../api'
 import { CheckIcon, MailIcon } from '../components/icons'
 import { CardHole, ErrorText, PrimaryButton, Screen, Sub, Tag, TextField, Title, TopBar } from '../components/ui'
 
 const CODE_LENGTH = 6
 const CODE_SECONDS = 5 * 60
 
+/** 회원가입 2단계: 이메일 인증 → 가입 → 바로 로그인 */
 export default function SignupEmail({
+  nickname,
+  password,
   onBack,
-  onVerified,
+  onDone,
 }: {
+  nickname: string
+  password: string
   onBack: () => void
-  onVerified: (email: string, code: string) => void
+  onDone: () => void
 }) {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
@@ -19,7 +24,7 @@ export default function SignupEmail({
   const [digits, setDigits] = useState<string[]>(Array(CODE_LENGTH).fill(''))
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
-  const [verifying, setVerifying] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const inputs = useRef<(HTMLInputElement | null)[]>([])
 
   // 남은 시간 타이머
@@ -75,26 +80,28 @@ export default function SignupEmail({
     inputs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus()
   }
 
-  async function handleVerify() {
+  async function handleSubmit() {
     if (expired) {
       setError('시간이 지났어요. 코드를 다시 받아 주세요.')
       return
     }
-    setVerifying(true)
+    setSubmitting(true)
     setError('')
     try {
-      await verifyEmailCode(email, code)
-      onVerified(email, code)
+      await verifyEmailCode(email, code) // 인증코드 확인
+      await signup({ email, code, nickname, password }) // 가입
+      await login(nickname, password) // 바로 로그인
+      onDone()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '인증에 실패했어요.')
+      setError(err instanceof Error ? err.message : '가입에 실패했어요.')
     } finally {
-      setVerifying(false)
+      setSubmitting(false)
     }
   }
 
   return (
     <Screen className="px-6 pt-4 pb-7">
-      <TopBar onBack={onBack} step={1} total={2} tone="wood" backLabel="로그인으로 돌아가기" />
+      <TopBar onBack={onBack} step={2} total={2} tone="wood" backLabel="닉네임 입력으로 돌아가기" />
 
       <div className="mt-[18px] flex flex-col gap-2">
         <Tag>MEMBERSHIP · 이메일 인증</Tag>
@@ -111,7 +118,7 @@ export default function SignupEmail({
           id="signup-email"
           label="이메일"
           type="email"
-          placeholder="id@gm.gist.ac.kr"
+          placeholder="이메일 입력"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -177,8 +184,8 @@ export default function SignupEmail({
       )}
 
       <div className="min-h-6 flex-1" />
-      <PrimaryButton onClick={handleVerify} disabled={!sent || code.length < CODE_LENGTH || verifying}>
-        {verifying ? '확인 중…' : '인증하고 다음'}
+      <PrimaryButton onClick={handleSubmit} disabled={!sent || code.length < CODE_LENGTH || submitting}>
+        {submitting ? '가입하는 중…' : '인증하고 가입하기'}
       </PrimaryButton>
     </Screen>
   )

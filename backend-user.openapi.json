@@ -1,0 +1,3274 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "SeatCom 백엔드 사용자 API (프론트↔백엔드, B01~B12)",
+    "version": "1.0.0-design",
+    "description": "구현 전 계약. 프론트가 호출하는 B01~B10. B11 좌석 좌표 목록은 BACKEND_SEATS_API.openapi.json, 추천 결과·취향 스키마는 MODEL_API.openapi.json을 참조한다. 성공 응답은 {data, meta}, 오류는 {error}. 모든 예시는 합성값이며 실제 도서관 자료가 아니다."
+  },
+  "servers": [
+    {
+      "url": "http://backend-api:3000",
+      "description": "개발 예시 주소"
+    }
+  ],
+  "security": [
+    {
+      "userBearer": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "libraries"
+    },
+    {
+      "name": "rooms"
+    },
+    {
+      "name": "preferences"
+    },
+    {
+      "name": "recommendations"
+    }
+  ],
+  "paths": {
+    "/api/v1/libraries": {
+      "get": {
+        "operationId": "listLibraries",
+        "tags": [
+          "libraries"
+        ],
+        "summary": "B01 기관 목록과 데이터 지원 범위",
+        "description": "지도·기관 목록용 마스터. 개인화된 주변 순위는 B10. capabilities는 기관의 실제 검수·연동 상태이며, 후보 링크만 있는 기관을 true로 표시하지 않는다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "목록이 없으면 빈 items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/libraries/{libraryId}/rooms": {
+      "get": {
+        "operationId": "listLibraryRooms",
+        "tags": [
+          "rooms"
+        ],
+        "summary": "B02 열람실·층·정원·규정 조회",
+        "description": "정원(totalSeats)은 빈자리 수가 아니다. 좌석 소속이 미매핑이면 seatRecommendation=false.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/LibraryId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "열람실 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/rooms/{roomId}/map": {
+      "get": {
+        "operationId": "getRoomMap",
+        "tags": [
+          "rooms"
+        ],
+        "summary": "B03 웹 좌석도·시설 레이어",
+        "description": "모델이 그림을 생성하는 API가 아니다. 좌표는 정규화(0~1) 값. facilities=[]는 등록 자료 없음이지 시설 부재가 아니다. 현황·성별·사용시간은 넣지 않으며 B04로 분리한다. 검수 전 지도는 preview 환경에서만 제공한다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RoomId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "좌석도",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomMapResponse"
+                },
+                "examples": {
+                  "synthetic": {
+                    "summary": "합성 예시",
+                    "value": {
+                      "data": {
+                        "roomId": "DEMO-ROOM-A",
+                        "mapId": "DEMO-MAP-A",
+                        "datasetVersion": "DEMO-DATA-v1",
+                        "mapVersion": "DEMO-MAP-v1",
+                        "width": 1000,
+                        "height": 700,
+                        "coordinateUnit": "normalized",
+                        "backgroundUrl": null,
+                        "verification": "verified",
+                        "seats": [
+                          {
+                            "seatId": "DEMO-SEAT-1",
+                            "label": "1",
+                            "x": 0.1,
+                            "y": 0.2,
+                            "width": 0.03,
+                            "height": 0.04,
+                            "verification": "verified"
+                          }
+                        ],
+                        "facilities": [],
+                        "sourceDate": "2026-11-14"
+                      },
+                      "meta": {
+                        "requestId": "req-demo-map"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/rooms/{roomId}/availability": {
+      "get": {
+        "operationId": "getRoomAvailability",
+        "tags": [
+          "rooms"
+        ],
+        "summary": "B04 마지막 관측 현황",
+        "description": "현황이 전혀 없어도 200과 roomAggregate=null, seatStates=[]. 개별 좌석 연동이 없으면 seatStates=[]. 수집 실패를 remainingSeats=totalSeats로 치환하지 않으며 미래 예측을 반환하지 않는다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RoomId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "마지막 관측값",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomAvailabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/preference-options": {
+      "get": {
+        "operationId": "getPreferenceOptions",
+        "tags": [
+          "preferences"
+        ],
+        "summary": "B12 취향 선택지 목록",
+        "description": "온보딩·오늘 조건 화면에 그릴 페르소나·질문·선택지. 프론트는 이 ID만 저장·전송한다. 특성 가중치(target·importance)와 필수 조건으로의 변환은 백엔드가 한다.",
+        "responses": {
+          "200": {
+            "description": "선택지 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceOptionsResponse"
+                },
+                "examples": {
+                  "synthetic": {
+                    "summary": "예시. 실제 목록은 프론트와 확정 필요",
+                    "value": {
+                      "data": {
+                        "optionsVersion": "options-1",
+                        "personas": [
+                          {
+                            "personaId": "laptop",
+                            "label": "노트북파"
+                          },
+                          {
+                            "personaId": "focus",
+                            "label": "집중파"
+                          },
+                          {
+                            "personaId": "window",
+                            "label": "창가파"
+                          },
+                          {
+                            "personaId": "quick",
+                            "label": "잠깐파"
+                          },
+                          {
+                            "personaId": "corner",
+                            "label": "구석파"
+                          },
+                          {
+                            "personaId": "longStay",
+                            "label": "장시간파"
+                          }
+                        ],
+                        "questions": [
+                          {
+                            "questionId": "temperature",
+                            "label": "추위·더위",
+                            "options": [
+                              {
+                                "optionId": "cold",
+                                "label": "추위 많이 탐"
+                              },
+                              {
+                                "optionId": "hot",
+                                "label": "더위 탐"
+                              }
+                            ]
+                          },
+                          {
+                            "questionId": "outlet",
+                            "label": "콘센트",
+                            "options": [
+                              {
+                                "optionId": "required",
+                                "label": "꼭 필요"
+                              },
+                              {
+                                "optionId": "niceToHave",
+                                "label": "있으면 좋음"
+                              }
+                            ]
+                          },
+                          {
+                            "questionId": "noise",
+                            "label": "소리",
+                            "options": [
+                              {
+                                "optionId": "sensitive",
+                                "label": "많이 신경 쓰임"
+                              }
+                            ]
+                          },
+                          {
+                            "questionId": "stay",
+                            "label": "머무는 시간",
+                            "options": [
+                              {
+                                "optionId": "underHour",
+                                "label": "1시간 이내"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "meta": {
+                        "requestId": "req-demo-options"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/preferences": {
+      "get": {
+        "operationId": "getMyPreferences",
+        "tags": [
+          "preferences"
+        ],
+        "summary": "B05 저장 취향 조회",
+        "description": "저장된 선택지 ID. 신규 사용자는 revision 0, personaIds [], answers {}.",
+        "responses": {
+          "200": {
+            "description": "저장된 선택",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPreferencesResponse"
+                },
+                "examples": {
+                  "synthetic": {
+                    "summary": "합성 예시",
+                    "value": {
+                      "data": {
+                        "revision": 3,
+                        "choices": {
+                          "personaIds": [
+                            "laptop",
+                            "focus"
+                          ],
+                          "answers": {
+                            "temperature": "cold",
+                            "outlet": "niceToHave"
+                          }
+                        }
+                      },
+                      "meta": {
+                        "requestId": "req-demo-pref"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putMyPreferences",
+        "tags": [
+          "preferences"
+        ],
+        "summary": "B06 취향 저장",
+        "description": "사용자가 고른 선택지 ID를 expectedRevision CAS로 저장한다. 백엔드가 변환표로 특성 가중치를 만들어 함께 저장한다. 오늘의 일시 조건을 이 API로 영구 저장하지 않는다. 모르는 ID는 422 INVALID_INPUT.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutPreferencesRequest"
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "합성 예시",
+                  "value": {
+                    "expectedRevision": 3,
+                    "choices": {
+                      "personaIds": [
+                        "laptop",
+                        "focus"
+                      ],
+                      "answers": {
+                        "temperature": "cold",
+                        "outlet": "required"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "새 revision의 저장된 선택",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/rooms": {
+      "post": {
+        "operationId": "createRoomRecommendation",
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "B07 내 취향 열람실 추천 생성",
+        "description": "profile·features·검수 상태·현황·선택 이력은 백엔드가 채워 M05를 호출하고, 입력 스냅샷과 결과를 저장한다. 후보가 없거나 조건에서 모두 탈락해도 같은 형식의 빈 결과(201)다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomRecommendationCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "저장된 추천. 같은 Idempotency-Key 재시도는 같은 결과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/seats": {
+      "post": {
+        "operationId": "createSeatRecommendation",
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "B08 내 취향 좌석 추천 생성",
+        "description": "M06의 운영 적격 좌석만 사용. 기본 confirmedOnly에서는 개별 현황 미연동으로 빈 결과일 수 있다. mapId·mapVersion은 B03과 일치해야 하며, 지도 버전이 바뀌면 선택 전에 재조회한다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatRecommendationCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "저장된 추천",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/{recommendationId}/events": {
+      "post": {
+        "operationId": "recordRecommendationEvent",
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "B09 노출·선택·이용 신고·평가 기록",
+        "description": "추천 소유권·후보 ID·스냅샷을 백엔드가 검사한다. 새 선택은 만료·필수 조건·지도 버전·현황을 재검증한다. preview 결과는 선택·신고 불가. useConfirmed·ratingSubmitted는 room·seat 추천에만 허용한다. 같은 eventId는 같은 결과를 돌려준다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RecommendationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationEvent"
+              },
+              "examples": {
+                "selected": {
+                  "summary": "추천 결과에서 선택",
+                  "value": {
+                    "eventId": "event-demo-selected",
+                    "type": "candidateSelected",
+                    "occurredAt": "2026-11-14T17:30:10+09:00",
+                    "targetId": "DEMO-ROOM-B",
+                    "origin": "recommendation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "기록됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResultResponse"
+                },
+                "examples": {
+                  "selected": {
+                    "summary": "선택은 이력만 바꾸고 revision은 그대로",
+                    "value": {
+                      "data": {
+                        "eventId": "event-demo-selected",
+                        "accepted": true,
+                        "effect": "historyUpdated",
+                        "profileRevision": 3
+                      },
+                      "meta": {
+                        "requestId": "req-demo-event"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/libraries": {
+      "post": {
+        "operationId": "createLibraryRecommendation",
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "B10 지금 갈 주변 도서관 추천",
+        "description": "백엔드가 위치와 공간 마스터로 M07을 호출한다. 거리는 직선거리이며 도보 ETA·도착 시 빈자리 확률은 없다. 위치 없는 기관을 이름으로 geocoding하지 않는다. 반경 확대·거리 중요도·후보 수준 변경은 새 요청이다.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryRecommendationCreateRequest"
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "합성 예시",
+                  "value": {
+                    "origin": {
+                      "latitude": 37.5,
+                      "longitude": 127
+                    },
+                    "maxDistanceMeters": 5000,
+                    "distanceWeight": 0.35,
+                    "candidateLevel": "room",
+                    "choices": {
+                      "personaIds": [
+                        "laptop",
+                        "focus"
+                      ],
+                      "answers": {
+                        "outlet": "required"
+                      }
+                    },
+                    "requirements": [
+                      {
+                        "featureId": "laptopAllowed",
+                        "operator": "eq",
+                        "value": 1
+                      }
+                    ],
+                    "options": {
+                      "topK": 3,
+                      "availabilityPolicy": "allowUnknown",
+                      "minFeatureCoverage": 0.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "저장된 추천. result.results[].targetType = library",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/ModelUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/rooms/{roomId}/seats": {
+      "get": {
+        "operationId": "listRoomSeatCoordinates",
+        "summary": "열람실별 좌석번호·좌표·크기·검수 상태 목록",
+        "description": "실제 DB의 안정적 ID로 조회. live는 검수된 좌석만, preview는 미검수 표기. 픽셀과 정규화 좌표를 같은 map 프레임에서 제공. 이용 상태·성별·시간은 없음. current preview169와 live0을 구분.",
+        "parameters": [
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "preview"
+              ],
+              "default": "live"
+            },
+            "description": "preview는 별도 권한/환경 허용 시만. 미검수 자료는 선택 불가."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "백엔드가 발급한 불투명 커서. room/view/filter/dataset/mapVersion과 결합. 버전 변경 시409."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "검수 상태와 뷰로 필터링한 좌석목록. 페이지의items수와전체total을구분.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeatListResponse"
+                },
+                "examples": {
+                  "preview": {
+                    "summary": "현재 A93 추출 좌표와 합성 서비스 ID를 사용한 미리보기 1건 페이지",
+                    "value": {
+                      "data": {
+                        "roomId": "PREVIEW-SN-CT-A",
+                        "datasetVersion": "preview-sn-ct-a-20261114",
+                        "map": {
+                          "mapId": "PREVIEW-SN-CT-A-MAP",
+                          "mapVersion": "preview-20261114-1",
+                          "width": 3772,
+                          "height": 1786,
+                          "coordinateUnit": "pixel",
+                          "origin": "topLeft"
+                        },
+                        "view": "preview",
+                        "items": [
+                          {
+                            "seatId": "PREVIEW-SN-CT-A-G001",
+                            "externalSeatId": null,
+                            "label": "A93",
+                            "geometry": {
+                              "pixel": {
+                                "x": 2112,
+                                "y": 117,
+                                "width": 66,
+                                "height": 56
+                              },
+                              "normalized": {
+                                "x": 0.55991516,
+                                "y": 0.06550952,
+                                "width": 0.01749735,
+                                "height": 0.03135498
+                              }
+                            },
+                            "verificationStatus": "unverified",
+                            "selectable": false
+                          }
+                        ],
+                        "total": 169,
+                        "nextCursor": "opaque-preview-cursor-example"
+                      },
+                      "meta": {
+                        "requestId": "req-preview-seat-list"
+                      }
+                    }
+                  },
+                  "noVerifiedSeats": {
+                    "summary": "현재 자료의 운영 적격 좌석이 없는 경우. 빈자리를 뜻하지 않음.",
+                    "value": {
+                      "data": {
+                        "roomId": "PREVIEW-SN-CT-A",
+                        "datasetVersion": "preview-sn-ct-a-20261114",
+                        "map": null,
+                        "view": "live",
+                        "items": [],
+                        "total": 0,
+                        "nextCursor": null
+                      },
+                      "meta": {
+                        "requestId": "req-preview-seat-list"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHENTICATED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse-2"
+                },
+                "example": {
+                  "error": {
+                    "code": "UNAUTHENTICATED",
+                    "message": "UNAUTHENTICATED",
+                    "requestId": "req-demo-error",
+                    "details": []
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse-2"
+                },
+                "example": {
+                  "error": {
+                    "code": "FORBIDDEN",
+                    "message": "FORBIDDEN",
+                    "requestId": "req-demo-error",
+                    "details": []
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse-2"
+                },
+                "example": {
+                  "error": {
+                    "code": "NOT_FOUND",
+                    "message": "NOT_FOUND",
+                    "requestId": "req-demo-error",
+                    "details": []
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CURSOR_VERSION_CHANGED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse-2"
+                },
+                "example": {
+                  "error": {
+                    "code": "CURSOR_VERSION_CHANGED",
+                    "message": "CURSOR_VERSION_CHANGED",
+                    "requestId": "req-demo-error",
+                    "details": []
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse-2"
+                },
+                "example": {
+                  "error": {
+                    "code": "INVALID_INPUT",
+                    "message": "INVALID_INPUT",
+                    "requestId": "req-demo-error",
+                    "details": []
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "userBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "사용자 인증. 실제 토큰을 예시에 넣지 않음."
+      }
+    },
+    "parameters": {
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "백엔드가 발급한 불투명 커서",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "LibraryId": {
+        "name": "libraryId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Id"
+        }
+      },
+      "RoomId": {
+        "name": "roomId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Id"
+        }
+      },
+      "RecommendationId": {
+        "name": "recommendationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Id"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "같은 사용자·경로·키에 같은 본문은 같은 결과, 다른 본문은 409 IDEMPOTENCY_CONFLICT",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "responses": {
+      "Unauthenticated": {
+        "description": "UNAUTHENTICATED",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "FORBIDDEN (예 preview 권한 없음)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "NOT_FOUND, MAP_NOT_AVAILABLE(B03 지도 원본 미확보)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "REVISION_CONFLICT, RECOMMENDATION_EXPIRED, AVAILABILITY_CHANGED, PREVIEW_NOT_SELECTABLE, IDEMPOTENCY_CONFLICT. 최신 데이터로 재요청하며 필수 조건을 자동 완화하지 않는다.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InvalidInput": {
+        "description": "INVALID_INPUT, FEATURE_VERSION_MISMATCH, UNSUPPORTED_FEATURE",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "RATE_LIMITED",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ModelUnavailable": {
+        "description": "MODEL_UNAVAILABLE. 모델 서버 응답 실패. 미검증 예시·모의 데이터로 대체하지 않는다.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "description": "내부 ID. 영문·숫자·하이픈·밑줄만. preview 자료는 PREVIEW- 접두사."
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "requestId"
+        ],
+        "additionalProperties": false
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "UNAUTHENTICATED",
+          "FORBIDDEN",
+          "NOT_FOUND",
+          "MAP_NOT_AVAILABLE",
+          "REVISION_CONFLICT",
+          "RECOMMENDATION_EXPIRED",
+          "AVAILABILITY_CHANGED",
+          "PREVIEW_NOT_SELECTABLE",
+          "IDEMPOTENCY_CONFLICT",
+          "CURSOR_VERSION_CHANGED",
+          "INVALID_INPUT",
+          "FEATURE_VERSION_MISMATCH",
+          "UNSUPPORTED_FEATURE",
+          "RATE_LIMITED",
+          "MODEL_UNAVAILABLE"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/ErrorCode"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "details": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId",
+              "details"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "Verification": {
+        "type": "string",
+        "enum": [
+          "verified",
+          "unverified"
+        ]
+      },
+      "NullableLatitude": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "NullableLongitude": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "LibraryCapabilities": {
+        "type": "object",
+        "description": "기관 단위 실제 지원 여부. 엔진 지원(M02)과 다르다.",
+        "properties": {
+          "roomRecommendation": {
+            "type": "boolean"
+          },
+          "seatRecommendation": {
+            "type": "boolean"
+          },
+          "seatMap": {
+            "type": "boolean"
+          },
+          "roomAvailability": {
+            "type": "boolean"
+          },
+          "seatAvailability": {
+            "type": "boolean"
+          },
+          "facilityFeatures": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "roomRecommendation",
+          "seatRecommendation",
+          "seatMap",
+          "roomAvailability",
+          "seatAvailability",
+          "facilityFeatures"
+        ],
+        "additionalProperties": false
+      },
+      "Library": {
+        "type": "object",
+        "properties": {
+          "libraryId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "latitude": {
+            "$ref": "#/components/schemas/NullableLatitude"
+          },
+          "longitude": {
+            "$ref": "#/components/schemas/NullableLongitude"
+          },
+          "datasetVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/LibraryCapabilities"
+          }
+        },
+        "required": [
+          "libraryId",
+          "name",
+          "latitude",
+          "longitude",
+          "datasetVersion",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      },
+      "LibraryListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/Library"
+                }
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "nextCursor"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "RoomCapabilities": {
+        "type": "object",
+        "properties": {
+          "roomRecommendation": {
+            "type": "boolean"
+          },
+          "seatRecommendation": {
+            "type": "boolean"
+          },
+          "seatMap": {
+            "type": "boolean"
+          },
+          "roomAvailability": {
+            "type": "boolean"
+          },
+          "seatAvailability": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "roomRecommendation",
+          "seatRecommendation",
+          "seatMap",
+          "roomAvailability",
+          "seatAvailability"
+        ],
+        "additionalProperties": false
+      },
+      "FeatureSummaryItem": {
+        "type": "object",
+        "description": "확인된 열람실 특성. 값이 없거나 null이면 미상이지 0이 아니다.",
+        "properties": {
+          "featureId": {
+            "$ref": "#/components/schemas/FeatureId"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "unverified",
+              "missing"
+            ]
+          },
+          "appliesToAllSeats": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "featureId",
+          "value",
+          "verification",
+          "appliesToAllSeats"
+        ],
+        "additionalProperties": false
+      },
+      "Room": {
+        "type": "object",
+        "properties": {
+          "roomId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "floor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "층 표기 문자열 (예 B1, 3층). 미상은 null"
+          },
+          "totalSeats": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "정원. 빈자리 수가 아니며 미상은 null"
+          },
+          "featureSummary": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/FeatureSummaryItem"
+            }
+          },
+          "mapId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/RoomCapabilities"
+          },
+          "sourceDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "datasetVersion": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "roomId",
+          "name",
+          "floor",
+          "totalSeats",
+          "featureSummary",
+          "mapId",
+          "capabilities",
+          "sourceDate",
+          "datasetVersion"
+        ],
+        "additionalProperties": false
+      },
+      "RoomListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "libraryId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            },
+            "required": [
+              "libraryId",
+              "items"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "NormalizedBox": {
+        "type": "object",
+        "description": "좌상단 원점 정규화 bbox. x+width<=1, y+height<=1",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      },
+      "MapSeat": {
+        "type": "object",
+        "properties": {
+          "seatId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "verification": {
+            "$ref": "#/components/schemas/Verification"
+          }
+        },
+        "required": [
+          "seatId",
+          "label",
+          "x",
+          "y",
+          "width",
+          "height",
+          "verification"
+        ],
+        "additionalProperties": false
+      },
+      "Facility": {
+        "type": "object",
+        "properties": {
+          "facilityId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "시설 종류 (예 toilet, entrance, window, outlet). 목록은 미확정"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/NormalizedBox"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/Verification"
+          }
+        },
+        "required": [
+          "facilityId",
+          "type",
+          "geometry",
+          "verification"
+        ],
+        "additionalProperties": false
+      },
+      "RoomMapResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "roomId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "mapId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "datasetVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mapVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "표시 프레임 가로(px)"
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "표시 프레임 세로(px)"
+              },
+              "coordinateUnit": {
+                "const": "normalized"
+              },
+              "backgroundUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri",
+                "description": "서비스가 관리하는 자원 URL만"
+              },
+              "verification": {
+                "$ref": "#/components/schemas/Verification"
+              },
+              "seats": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MapSeat"
+                }
+              },
+              "facilities": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Facility"
+                }
+              },
+              "sourceDate": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date"
+              }
+            },
+            "required": [
+              "roomId",
+              "mapId",
+              "datasetVersion",
+              "mapVersion",
+              "width",
+              "height",
+              "coordinateUnit",
+              "backgroundUrl",
+              "verification",
+              "seats",
+              "facilities",
+              "sourceDate"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "RoomAggregate": {
+        "type": "object",
+        "description": "0 <= remainingSeats <= totalSeats. 특정 좌석 상태가 아니다.",
+        "properties": {
+          "totalSeats": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remainingSeats": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "totalSeats",
+          "remainingSeats",
+          "observedAt",
+          "expiresAt",
+          "sourceId"
+        ],
+        "additionalProperties": false
+      },
+      "SeatState": {
+        "type": "object",
+        "properties": {
+          "seatId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "occupied",
+              "reserved",
+              "blocked",
+              "unknown"
+            ]
+          },
+          "observedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "seatId",
+          "state",
+          "observedAt",
+          "expiresAt",
+          "sourceId"
+        ],
+        "additionalProperties": false
+      },
+      "RoomAvailabilityResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "roomId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "roomAggregate": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RoomAggregate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "seatStates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SeatState"
+                }
+              },
+              "receivedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "roomId",
+              "roomAggregate",
+              "seatStates",
+              "receivedAt"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "Choices": {
+        "type": "object",
+        "description": "사용자가 고른 선택지 ID. 값은 GET /api/v1/preference-options가 준 ID만 쓴다. 모르는 ID는 422 INVALID_INPUT.",
+        "properties": {
+          "personaIds": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            }
+          },
+          "answers": {
+            "type": "object",
+            "description": "questionId → optionId",
+            "maxProperties": 20,
+            "propertyNames": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChoiceOption": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "optionId",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "PreferencePersona": {
+        "type": "object",
+        "properties": {
+          "personaId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "personaId",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "PreferenceQuestion": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOption"
+            }
+          }
+        },
+        "required": [
+          "questionId",
+          "label",
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "PreferenceOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "optionsVersion": {
+                "type": "string",
+                "minLength": 1,
+                "description": "선택지·변환표 버전"
+              },
+              "personas": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PreferencePersona"
+                }
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PreferenceQuestion"
+                }
+              }
+            },
+            "required": [
+              "optionsVersion",
+              "personas",
+              "questions"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "SavedPreferencesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "choices": {
+                "$ref": "#/components/schemas/Choices"
+              }
+            },
+            "required": [
+              "revision",
+              "choices"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "PutPreferencesRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "신규 사용자는 0"
+          },
+          "choices": {
+            "$ref": "#/components/schemas/Choices"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "choices"
+        ],
+        "additionalProperties": false
+      },
+      "UserOptions": {
+        "type": "object",
+        "description": "maxAvailabilityAgeSeconds는 백엔드가 공급원별로 정하므로 받지 않는다.",
+        "properties": {
+          "topK": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 5
+          },
+          "availabilityPolicy": {
+            "type": "string",
+            "enum": [
+              "confirmedOnly",
+              "allowUnknown"
+            ],
+            "default": "confirmedOnly"
+          },
+          "minFeatureCoverage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "RecommendationInputBase": {
+        "type": "object",
+        "description": "오늘만 쓰는 조건. 저장된 취향을 바꾸지 않는다. choices를 보내면 저장된 선택 위에 덮어쓴다 (personaIds는 보내면 통째로 교체, answers는 질문별로 교체). 특성 가중치·필수 조건으로의 변환은 백엔드가 한다.",
+        "properties": {
+          "choices": {
+            "$ref": "#/components/schemas/Choices"
+          },
+          "options": {
+            "$ref": "#/components/schemas/UserOptions"
+          }
+        }
+      },
+      "RoomRecommendationCreateRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RecommendationInputBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "libraryIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/components/schemas/Id"
+                }
+              }
+            },
+            "required": [
+              "libraryIds"
+            ]
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "SeatRecommendationCreateRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RecommendationInputBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "roomId": {
+                "$ref": "#/components/schemas/Id"
+              }
+            },
+            "required": [
+              "roomId"
+            ]
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "LibraryRecommendationCreateRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RecommendationInputBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "$ref": "#/components/schemas/Origin"
+              },
+              "maxDistanceMeters": {
+                "type": "number",
+                "minimum": 100,
+                "maximum": 50000,
+                "default": 5000
+              },
+              "distanceWeight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.35
+              },
+              "candidateLevel": {
+                "type": "string",
+                "enum": [
+                  "room",
+                  "seat"
+                ]
+              }
+            },
+            "required": [
+              "origin",
+              "candidateLevel"
+            ]
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "RecommendationResponseEnvelope": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "recommendationId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "생성 후 60초와 사용한 현황 만료시각 중 이른 값"
+              },
+              "profileRevision": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "result": {
+                "$ref": "#/components/schemas/RecommendationResponse"
+              },
+              "displayNames": {
+                "type": "object",
+                "description": "libraryId·roomId·seatId → 화면 표시명. 모델 응답(result)은 손대지 않고 여기에 붙인다.",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Id"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "recommendationId",
+              "createdAt",
+              "expiresAt",
+              "profileRevision",
+              "result",
+              "displayNames"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RecommendationExposedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CandidateSelectedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/UseConfirmedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/RatingSubmittedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CandidateRejectedEvent"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "recommendationExposed": "#/components/schemas/RecommendationExposedEvent",
+            "candidateSelected": "#/components/schemas/CandidateSelectedEvent",
+            "useConfirmed": "#/components/schemas/UseConfirmedEvent",
+            "ratingSubmitted": "#/components/schemas/RatingSubmittedEvent",
+            "candidateRejected": "#/components/schemas/CandidateRejectedEvent"
+          }
+        }
+      },
+      "RecommendationExposedEvent": {
+        "type": "object",
+        "description": "저장된 결과의 부분집합과 노출 순서를 검증",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "const": "recommendationExposed"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "visibleTargetIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/Id"
+            }
+          }
+        },
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "visibleTargetIds"
+        ],
+        "additionalProperties": false
+      },
+      "CandidateSelectedEvent": {
+        "type": "object",
+        "description": "개인 선택 이력(choiceAffinity)에 반영. 저장 취향 revision은 바꾸지 않는다.",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "const": "candidateSelected"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "targetId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "recommendation",
+              "outsideRecommendations"
+            ]
+          }
+        },
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "targetId",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "UseConfirmedEvent": {
+        "type": "object",
+        "description": "앞선 선택과 연결한 자기신고. 실제 착석 검증이 아니다.",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "const": "useConfirmed"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "targetId": {
+            "$ref": "#/components/schemas/Id"
+          }
+        },
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "targetId"
+        ],
+        "additionalProperties": false
+      },
+      "RatingSubmittedEvent": {
+        "type": "object",
+        "description": "corrections가 있으면 최신 프로필로 M08 계산 후 CAS 저장",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "const": "ratingSubmitted"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "targetId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "corrections": {
+            "type": "array",
+            "maxItems": 20,
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Preference"
+            }
+          }
+        },
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "targetId",
+          "rating"
+        ],
+        "additionalProperties": false
+      },
+      "CandidateRejectedEvent": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "type": {
+            "const": "candidateRejected"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "targetId": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "회피 이유. 정해진 값 목록은 미확정이라 자유 문자열"
+          },
+          "excludeFromFuture": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "targetId",
+          "reason",
+          "excludeFromFuture"
+        ],
+        "additionalProperties": false
+      },
+      "EventResultResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "eventId": {
+                "$ref": "#/components/schemas/Id"
+              },
+              "accepted": {
+                "const": true
+              },
+              "effect": {
+                "type": "string",
+                "enum": [
+                  "storedOnly",
+                  "historyUpdated",
+                  "preferencesUpdated"
+                ]
+              },
+              "profileRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "eventId",
+              "accepted",
+              "effect",
+              "profileRevision"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "FeatureId": {
+        "type": "string",
+        "enum": [
+          "laptopAllowed",
+          "keyboardAllowed",
+          "partition",
+          "outletAvailable",
+          "windowProximity",
+          "toiletProximity",
+          "entranceProximity",
+          "brightness",
+          "airflow",
+          "deskHeight",
+          "deskWidth",
+          "viewQuality"
+        ]
+      },
+      "MapAnchor": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "mapId",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "additionalProperties": false,
+        "description": "좌상단 원점의 정규화 bbox. 추가 불변식 x+width<=1,y+height<=1."
+      },
+      "Scores": {
+        "type": "object",
+        "properties": {
+          "featureScore": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "featureCoverage": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "choiceAffinity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "personalizationScore": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "distanceUtility": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effectiveDistanceWeight": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finalScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "featureScore",
+          "featureCoverage",
+          "choiceAffinity",
+          "personalizationScore",
+          "distanceUtility",
+          "effectiveDistanceWeight",
+          "finalScore"
+        ],
+        "additionalProperties": false
+      },
+      "EffectiveAvailability": {
+        "type": "object",
+        "properties": {
+          "effectiveState": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unknown"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "seat",
+              "roomAggregate",
+              "none"
+            ]
+          },
+          "observedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "effectiveState",
+          "scope",
+          "observedAt",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "Distance": {
+        "type": "object",
+        "properties": {
+          "meters": {
+            "type": "number",
+            "minimum": 0
+          },
+          "metric": {
+            "const": "straightLine"
+          }
+        },
+        "required": [
+          "meters",
+          "metric"
+        ],
+        "additionalProperties": false
+      },
+      "Reason": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "featureId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "code",
+          "featureId",
+          "sourceId",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationResult": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "library",
+              "room",
+              "seat"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "libraryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "roomId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "seatId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "representativeCandidateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "mapAnchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rankingBasis": {
+            "type": "string",
+            "enum": [
+              "preferencesAndHistory",
+              "preferences",
+              "history",
+              "distanceOnly",
+              "unpersonalized"
+            ]
+          },
+          "scores": {
+            "$ref": "#/components/schemas/Scores"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/EffectiveAvailability"
+          },
+          "availabilityVerified": {
+            "type": "boolean"
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Distance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reason"
+            },
+            "minItems": 0,
+            "maxItems": 20
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 20
+          },
+          "previewOnly": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rank",
+          "targetType",
+          "targetId",
+          "libraryId",
+          "roomId",
+          "seatId",
+          "representativeCandidateId",
+          "mapAnchor",
+          "rankingBasis",
+          "scores",
+          "availability",
+          "availabilityVerified",
+          "distance",
+          "reasons",
+          "warnings",
+          "previewOnly"
+        ],
+        "additionalProperties": false
+      },
+      "Exclusion": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "CLOSED",
+                "EXCLUDED_BY_USER",
+                "UNVERIFIED_IDENTITY",
+                "UNVERIFIED_GEOMETRY",
+                "KNOWN_UNAVAILABLE",
+                "AVAILABILITY_UNKNOWN",
+                "HARD_REQUIREMENT_UNKNOWN",
+                "HARD_REQUIREMENT_NOT_MET",
+                "INSUFFICIENT_FEATURE_COVERAGE",
+                "MISSING_LIBRARY_LOCATION",
+                "OUTSIDE_RADIUS"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "candidateId",
+          "reasonCodes"
+        ],
+        "additionalProperties": false
+      },
+      "RecommendationResponse": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "engineVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "featureRegistryVersion": {
+            "const": "features-1"
+          },
+          "datasetVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "executionMode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "preview"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "ranked",
+              "noCandidates",
+              "noEligibleCandidates"
+            ]
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendationResult"
+            },
+            "minItems": 0,
+            "maxItems": 20
+          },
+          "excluded": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Exclusion"
+            },
+            "minItems": 0,
+            "maxItems": 5000
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 0,
+            "maxItems": 30
+          },
+          "statistics": {
+            "type": "object",
+            "properties": {
+              "inputCandidates": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "eligibleCandidates": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "returnedTargets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "inputCandidates",
+              "eligibleCandidates",
+              "returnedTargets"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "requestId",
+          "engineVersion",
+          "featureRegistryVersion",
+          "datasetVersion",
+          "evaluatedAt",
+          "executionMode",
+          "outcome",
+          "results",
+          "excluded",
+          "warnings",
+          "statistics"
+        ],
+        "additionalProperties": false
+      },
+      "Preference": {
+        "type": "object",
+        "properties": {
+          "featureId": {
+            "$ref": "#/components/schemas/FeatureId"
+          },
+          "target": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "importance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "featureId",
+          "target",
+          "importance"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "featureId": {
+                  "enum": [
+                    "laptopAllowed",
+                    "keyboardAllowed",
+                    "partition",
+                    "outletAvailable"
+                  ]
+                }
+              },
+              "required": [
+                "featureId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "target": {
+                  "enum": [
+                    0,
+                    1
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Origin": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "additionalProperties": false
+      },
+      "Map": {
+        "type": "object",
+        "properties": {
+          "mapId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mapVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "width": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "coordinateUnit": {
+            "const": "pixel"
+          },
+          "origin": {
+            "const": "topLeft"
+          }
+        },
+        "required": [
+          "mapId",
+          "mapVersion",
+          "width",
+          "height",
+          "coordinateUnit",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "SeatCoordinate": {
+        "type": "object",
+        "properties": {
+          "seatId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "externalSeatId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "geometry": {
+            "type": "object",
+            "properties": {
+              "pixel": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "width": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "height": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false
+              },
+              "normalized": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "width": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  },
+                  "height": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "pixel",
+              "normalized"
+            ],
+            "additionalProperties": false
+          },
+          "verificationStatus": {
+            "enum": [
+              "unverified",
+              "verified"
+            ]
+          },
+          "selectable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "seatId",
+          "externalSeatId",
+          "label",
+          "geometry",
+          "verificationStatus",
+          "selectable"
+        ],
+        "additionalProperties": false
+      },
+      "SeatListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "roomId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "datasetVersion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "map": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Map"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "view": {
+                "enum": [
+                  "live",
+                  "preview"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SeatCoordinate"
+                },
+                "maxItems": 500
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "roomId",
+              "datasetVersion",
+              "map",
+              "view",
+              "items",
+              "total",
+              "nextCursor"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "additionalProperties": false
+      },
+      "ErrorResponse-2": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 0,
+                "maxItems": 100
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId",
+              "details"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "x-semantic-invariants": [
+    "클라이언트가 보낸 피처·검수 여부를 받지 않는다. 후보 정보는 모두 백엔드가 채운다.",
+    "추천 결과를 예약·빈자리 확보로 표현하지 않는다.",
+    "preview 결과는 선택·이용 신고를 409 PREVIEW_NOT_SELECTABLE로 거절한다.",
+    "confirmedOnly에서 선택 시 이용 가능이 더 이상 확인되지 않으면 409 AVAILABILITY_CHANGED.",
+    "만료된 추천으로 새 선택을 허용하지 않는다(409 RECOMMENDATION_EXPIRED).",
+    "같은 eventId·Idempotency-Key는 한 번만 저장한다."
+  ]
+}

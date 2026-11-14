@@ -1,43 +1,115 @@
-export type PersonaId = 'laptop' | 'focus' | 'window' | 'short' | 'corner' | 'long'
+// 백엔드 명세(B01~B12)에 맞춘 데이터 모양
 
-export type QuestionId = 'cold' | 'plug' | 'noise' | 'stay'
-
-/** 질문 id → 고른 보기의 번호(0부터) */
-export type Answers = Partial<Record<QuestionId, number>>
-
-export interface Preferences {
-  personas: PersonaId[]
-  answers: Answers
+/** 사용자가 고른 선택지 ID (B05·B06·B08에서 그대로 주고받음) */
+export interface Choices {
+  personaIds: string[]
+  answers: Record<string, string> // questionId → optionId
 }
 
-export interface MapSeat {
-  id: string // 예: "A-01"
-  taken: boolean
+// ---------- B12 선택지 목록 ----------
+export interface PreferencePersona {
+  personaId: string
+  label: string
+  description?: string | null
+}
+
+export interface PreferenceQuestion {
+  questionId: string
+  label: string
+  options: { optionId: string; label: string }[]
+}
+
+export interface PreferenceOptions {
+  optionsVersion: string
+  personas: PreferencePersona[]
+  questions: PreferenceQuestion[]
+}
+
+// ---------- B05·B06 저장된 취향 ----------
+export interface SavedPreferences {
+  revision: number
+  choices: Choices
+}
+
+// ---------- B03 좌석도 ----------
+export interface Box {
+  x: number // 0~1, 왼쪽 위 기준
+  y: number
+  width: number
+  height: number
+}
+
+export interface MapSeat extends Box {
+  seatId: string
+  label: string | null
+  verification: 'verified' | 'unverified'
+}
+
+export interface Facility {
+  facilityId: string
+  type: string // toilet, entrance, window, outlet 등
+  geometry: Box
+  verification: 'verified' | 'unverified'
 }
 
 export interface RoomMap {
-  roomName: string
-  rows: MapSeat[][] // 위에서부터 한 줄씩
-  aisleAfterRow: number // 이 줄 다음에 통로가 있음
+  roomId: string
+  mapId: string
+  mapVersion: string
+  width: number
+  height: number
+  backgroundUrl: string | null
+  verification: 'verified' | 'unverified'
+  seats: MapSeat[]
+  facilities: Facility[]
+}
+
+// ---------- B04 현황 ----------
+export type SeatStateValue = 'available' | 'occupied' | 'reserved' | 'blocked' | 'unknown'
+
+export interface RoomAvailability {
+  roomId: string
+  roomAggregate: { totalSeats: number; remainingSeats: number; observedAt: string } | null
+  seatStates: { seatId: string; state: SeatStateValue }[]
+}
+
+// ---------- B08 추천 결과 ----------
+export interface Reason {
+  code: string
+  featureId: string | null
+  text: string
+}
+
+export interface RecommendationResult {
+  rank: number
+  targetType: 'library' | 'room' | 'seat'
+  targetId: string
+  libraryId: string
+  roomId: string
+  seatId: string | null
+  mapAnchor: (Box & { mapId: string }) | null
+  availability: { effectiveState: 'available' | 'unknown' }
+  reasons: Reason[]
+  warnings: string[]
+  previewOnly: boolean
 }
 
 export interface Recommendation {
-  seatId: string
-  seatName: string // 예: "제1열람실 A-01"
-  reasons: string[]
+  recommendationId: string
+  createdAt: string
+  expiresAt: string
+  profileRevision: number
+  result: {
+    executionMode: 'live' | 'preview'
+    outcome: 'ranked' | 'noCandidates' | 'noEligibleCandidates'
+    results: RecommendationResult[]
+    warnings: string[]
+  }
+  displayNames: Record<string, string> // id → 화면 표시 이름
 }
 
-export interface RecommendResult {
-  requestId: string // 피드백 보낼 때 다시 씀
-  room: RoomMap
-  first: Recommendation
-  second: Recommendation
-}
-
-export interface FeedbackBody {
-  requestId: string
-  action: 'accept' | 'reject'
-  seatId?: string
-  reasons?: string[]
-  comment?: string
-}
+// ---------- B09 이벤트 (eventId, occurredAt은 api가 붙임) ----------
+export type RecommendationEvent =
+  | { type: 'recommendationExposed'; visibleTargetIds: string[] }
+  | { type: 'candidateSelected'; targetId: string; origin: 'recommendation' | 'outsideRecommendations' }
+  | { type: 'candidateRejected'; targetId: string; reason: string; excludeFromFuture: boolean }

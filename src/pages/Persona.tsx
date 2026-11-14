@@ -1,20 +1,22 @@
-import { PERSONAS } from '../data/options'
-import type { PersonaId } from '../types'
+import { DEFAULT_PERSONA_ICON, PERSONA_UI } from '../data/options'
+import type { PreferencePersona } from '../types'
 import { CheckIcon } from '../components/icons'
 import { PrimaryButton, Screen, Sub, Tag, Title, TopBar } from '../components/ui'
 
 export default function Persona({
+  personas,
   selected,
   onChange,
   onBack,
   onNext,
 }: {
-  selected: PersonaId[]
-  onChange: (next: PersonaId[]) => void
+  personas: PreferencePersona[] // B12에서 받은 목록
+  selected: string[]
+  onChange: (next: string[]) => void
   onBack: () => void
   onNext: () => void
 }) {
-  const toggle = (id: PersonaId) =>
+  const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
 
   return (
@@ -28,15 +30,17 @@ export default function Persona({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        {PERSONAS.map((p) => {
-          const on = selected.includes(p.id)
-          const Icon = p.icon
+        {personas.map((p) => {
+          const on = selected.includes(p.personaId)
+          const ui = PERSONA_UI[p.personaId]
+          const Icon = ui?.icon ?? DEFAULT_PERSONA_ICON
+          const desc = p.description || ui?.desc || ''
           return (
             <button
-              key={p.id}
+              key={p.personaId}
               type="button"
               aria-pressed={on}
-              onClick={() => toggle(p.id)}
+              onClick={() => toggle(p.personaId)}
               className={`relative flex min-h-[148px] flex-col items-start gap-2 rounded-[14px] border-[1.5px] p-4 text-left transition-colors ${
                 on ? 'border-teal bg-teal-tint' : 'border-line bg-cream hover:border-label'
               }`}
@@ -46,8 +50,8 @@ export default function Persona({
               >
                 <Icon className="size-[22px]" />
               </span>
-              <span className="text-base font-bold">{p.name}</span>
-              <span className="text-[12.5px] leading-[1.45] text-muted">{p.desc}</span>
+              <span className="text-base font-bold">{p.label}</span>
+              {desc && <span className="text-[12.5px] leading-[1.45] text-muted">{desc}</span>}
               {on && (
                 <span className="absolute top-3 right-3 flex size-[22px] items-center justify-center rounded-full bg-teal text-white">
                   <CheckIcon className="size-3.5" strokeWidth={2.6} />

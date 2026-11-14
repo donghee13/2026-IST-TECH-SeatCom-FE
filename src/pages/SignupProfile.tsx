@@ -1,59 +1,42 @@
 import { useState, type FormEvent } from 'react'
-import { login, signup } from '../api'
-import { CheckIcon } from '../components/icons'
-import { ErrorText, LibraryCard, PrimaryButton, Screen, Tag, TextField, Title, TopBar } from '../components/ui'
+import { ErrorText, LibraryCard, PrimaryButton, Screen, Sub, Tag, TextField, Title, TopBar } from '../components/ui'
 
+/** 회원가입 1단계: 닉네임 + 비밀번호 입력 (가입은 2단계 이메일 인증 후에 함) */
 export default function SignupProfile({
-  email,
-  code,
+  initialNickname = '',
   onBack,
-  onDone,
+  onNext,
 }: {
-  email: string
-  code: string
+  initialNickname?: string
   onBack: () => void
-  onDone: () => void
+  onNext: (nickname: string, password: string) => void
 }) {
-  const [nickname, setNickname] = useState('')
+  const [nickname, setNickname] = useState(initialNickname)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!nickname.trim() || !password) {
       setError('닉네임과 비밀번호를 입력해 주세요.')
       return
     }
-    setLoading(true)
     setError('')
-    try {
-      await signup({ email, code, nickname: nickname.trim(), password })
-      await login(nickname.trim(), password) // 가입 후 바로 로그인
-      onDone()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '가입에 실패했어요.')
-    } finally {
-      setLoading(false)
-    }
+    onNext(nickname.trim(), password)
   }
 
   return (
     <Screen className="px-6 pt-4 pb-7">
-      <TopBar onBack={onBack} step={2} total={2} tone="wood" backLabel="이메일 인증으로 돌아가기" />
+      <TopBar onBack={onBack} step={1} total={2} tone="wood" backLabel="로그인으로 돌아가기" />
 
       <div className="mt-[18px] flex flex-col gap-2">
         <Tag>MEMBERSHIP · 회원증 발급</Tag>
         <Title>회원증을 만들어요</Title>
+        <Sub>로그인할 때 쓸 닉네임과 비밀번호를 정해 주세요.</Sub>
       </div>
 
       <div className="mt-[18px]">
-        <LibraryCard name={nickname.trim() || '[닉네임]'} sub={email} />
-      </div>
-
-      <div className="mt-3.5 flex items-center gap-1.5 self-start rounded-2xl bg-teal-tint px-3 py-1.5 text-[13px] font-medium text-teal-deep">
-        <CheckIcon className="size-3.5" />
-        이메일 인증 완료
+        <LibraryCard name={nickname.trim() || '[닉네임]'} sub="이메일 인증 전" />
       </div>
 
       <form id="signup-form" onSubmit={handleSubmit} className="mt-[22px] flex flex-col gap-4">
@@ -79,8 +62,8 @@ export default function SignupProfile({
       </form>
 
       <div className="min-h-6 flex-1" />
-      <PrimaryButton type="submit" form="signup-form" disabled={loading}>
-        {loading ? '가입하는 중…' : '가입하기'}
+      <PrimaryButton type="submit" form="signup-form">
+        다음
       </PrimaryButton>
     </Screen>
   )
