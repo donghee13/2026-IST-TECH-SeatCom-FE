@@ -32,6 +32,14 @@ body {
   margin: 0;
   background: var(--color-paper);
   -webkit-font-smoothing: antialiased;
+  /* 한글이 단어 중간에서 줄바꿈되지 않게 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+::selection {
+  background: var(--color-teal-tint);
+  color: var(--color-teal-deep);
 }
 
 button {

@@ -1,102 +1,141 @@
 import { useCallback, useEffect, useState } from 'react'
-import { clearToken, getMyPreferences, getPreferenceOptions, getToken } from './api'
-import type { Choices, PreferenceOptions } from './types'
-import { BookShelf, ErrorText, Screen, SecondaryButton } from './components/ui'
+import {
+  ApiError,
+  clearLabSession,
+  clearLocalData,
+  deleteLabSession,
+  getPersonaQuestions,
+  getPersonaResult,
+  getToken,
+  loadLabSession,
+  saveLabSession,
+  type SavedLab,
+} from './api'
+import type { LabSession, LabStatus as LabStatusData, PersonaQuestion, PersonaResult as PersonaResultData } from './types'
+import { ErrorScreen, LoadingScreen } from './components/ui'
 import Login from './pages/Login'
-import SignupEmail from './pages/SignupEmail'
 import SignupProfile from './pages/SignupProfile'
-import Persona from './pages/Persona'
+import SignupEmail from './pages/SignupEmail'
 import Questions from './pages/Questions'
-import Start from './pages/Start'
+import PersonaResult from './pages/PersonaResult'
+import Home from './pages/Home'
+import LabConsent from './pages/LabConsent'
+import LabExport from './pages/LabExport'
+import LabMail from './pages/LabMail'
+import LabStatus from './pages/LabStatus'
+import LabResult from './pages/LabResult'
 import Result from './pages/Result'
 
-type ScreenName = 'login' | 'signupProfile' | 'signupEmail' | 'persona' | 'questions' | 'start' | 'result'
-
-const NEEDS_OPTIONS: ScreenName[] = ['persona', 'questions', 'start', 'result']
+type ScreenName =
+  | 'login'
+  | 'signupProfile'
+  | 'signupEmail'
+  | 'boot' // 로그인 직후: 설문 결과가 있는지 확인
+  | 'questions'
+  | 'personaResult'
+  | 'home'
+  | 'labConsent'
+  | 'labExport'
+  | 'labMail'
+  | 'labStatus'
+  | 'labResult'
+  | 'result'
 
 export default function App() {
-  // 저장된 토큰이 있으면 로그인 건너뛰기
-  const [screen, setScreen] = useState<ScreenName>(() => (getToken() ? 'persona' : 'login'))
-  // 회원가입 1단계에서 받은 닉네임·비밀번호 (2단계 이메일 인증 후 가입에 사용)
+  const [screen, setScreen] = useState<ScreenName>(() => (getToken() ? 'boot' : 'login'))
   const [account, setAccount] = useState<{ nickname: string; password: string } | null>(null)
-  const [choices, setChoices] = useState<Choices>({ personaIds: [], answers: {} })
+  const [questions, setQuestions] = useState<PersonaQuestion[]>([])
+  const [personaResult, setPersonaResult] = useState<PersonaResultData | null>(null)
+  const [lab, setLab] = useState<SavedLab | null>(() => loadLabSession())
+  const [bootError, setBootError] = useState('')
 
-  // B12 선택지 목록
-  const [options, setOptions] = useState<PreferenceOptions | null>(null)
-  const [optionsError, setOptionsError] = useState('')
-
-  const loadOptions = useCallback(async () => {
-    setOptionsError('')
-    try {
-      const [opts, saved] = await Promise.all([
-        getPreferenceOptions(),
-        getMyPreferences().catch(() => null), // 저장된 취향이 있으면 미리 채움
-      ])
-      setOptions(opts)
-      if (saved) setChoices({ personaIds: saved.choices.personaIds ?? [], answers: saved.choices.answers ?? {} })
-    } catch (e) {
-      setOptionsError(e instanceof Error ? e.message : '선택지를 불러오지 못했어요.')
-    }
+  const logout = useCallback(() => {
+    clearLocalData()
+    setPersonaResult(null)
+    setQuestions([])
+    setLab(null)
+    setBootError('')
+    setScreen('login')
   }, [])
 
+  // 로그인 직후: 질문 목록과 설문 결과를 불러와서 결과가 있으면 메인, 없으면 질문으로
+  const boot = useCallback(async () => {
+    setBootError('')
+    try {
+      const [qs, result] = await Promise.all([getPersonaQuestions(), getPersonaResult()])
+      setQuestions(qs)
+      setPersonaResult(result)
+      setScreen(result ? 'home' : 'questions')
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'UNAUTHORIZED') {
+        logout()
+        return
+      }
+      setBootError(e instanceof Error ? e.message : '불러오지 못했어요.')
+    }
+  }, [logout])
+
   useEffect(() => {
-    if (NEEDS_OPTIONS.includes(screen) && !options && !optionsError) void loadOptions()
-  }, [screen, options, optionsError, loadOptions])
+    if (screen === 'boot') void boot()
+  }, [screen, boot])
 
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [screen])
 
-  const logout = () => {
-    clearToken()
-    setOptions(null)
-    setOptionsError('')
-    setScreen('login')
+  // 실험실 진행 상태 저장 (새로고침해도 이어서)
+  const updateLab = useCallback((next: SavedLab | null) => {
+    setLab(next)
+    if (next) saveLabSession(next)
+    else clearLabSession()
+  }, [])
+
+  const handleLabStatus = useCallback(
+    (s: LabStatusData) => {
+      setLab((prev) => {
+        if (!prev) return prev
+        const next = { ...prev, last_status: s.status, analysis_id: s.analysis.analysis_id ?? prev.analysis_id }
+        saveLabSession(next)
+        return next
+      })
+    },
+    [],
+  )
+
+  const handleLabCompleted = useCallback(() => setScreen('labResult'), [])
+
+  async function removeLab(goTo: ScreenName) {
+    if (lab) await deleteLabSession(lab.upload_id).catch(() => undefined) // 이미 없어도 계속
+    updateLab(null)
+    setScreen(goTo)
   }
 
-  const goAfterLogin = () => {
-    setAccount(null) // 비밀번호를 메모리에 남겨두지 않음
-    setOptionsError('')
-    setScreen('persona')
+  function openLab() {
+    if (!lab) return setScreen('labConsent')
+    if (lab.last_status === 'completed' && lab.analysis_id) return setScreen('labResult')
+    if (lab.last_status === 'rejected' || lab.last_status === 'expired') return setScreen('labStatus')
+    return setScreen(lab.last_status ? 'labStatus' : 'labExport')
   }
 
-  // 닉네임·비밀번호 없이 회원가입 2단계로 오면 1단계로
-  const current: ScreenName = screen === 'signupEmail' && !account ? 'signupProfile' : screen
+  // 필요한 정보 없이 온 화면은 알맞은 화면으로 돌림
+  let current: ScreenName = screen
+  if (current === 'signupEmail' && !account) current = 'signupProfile' // 닉네임·비밀번호 없음
+  if ((current === 'labExport' || current === 'labMail' || current === 'labStatus') && !lab) current = 'labConsent'
+  if (current === 'labResult' && !lab?.analysis_id) current = 'home'
+  if ((current === 'home' || current === 'personaResult') && !personaResult) current = 'questions'
 
-  // 선택지가 필요한 화면인데 아직 없으면 로딩/오류 화면
-  if (NEEDS_OPTIONS.includes(current) && !options) {
-    return (
-      <Screen className="items-center justify-center gap-4 px-5">
-        {optionsError ? (
-          <>
-            <ErrorText>{optionsError}</ErrorText>
-            <SecondaryButton className="px-6" onClick={() => void loadOptions()}>
-              다시 시도
-            </SecondaryButton>
-            <button type="button" onClick={logout} className="min-h-11 text-sm text-muted underline">
-              로그인 화면으로
-            </button>
-          </>
-        ) : (
-          <>
-            <BookShelf scale={0.6} count={8} withShelf={false} />
-            <p role="status" className="m-0 text-sm text-muted">
-              불러오는 중…
-            </p>
-          </>
-        )}
-      </Screen>
+  // 로그인 직후 확인 중 / 오류
+  if (current === 'boot') {
+    return bootError ? (
+      <ErrorScreen message={bootError} onRetry={() => void boot()} secondaryLabel="로그인 화면으로" onSecondary={logout} />
+    ) : (
+      <LoadingScreen />
     )
   }
 
-  const personaText = (options?.personas ?? [])
-    .filter((p) => choices.personaIds.includes(p.personaId))
-    .map((p) => p.label)
-    .join(' · ')
-
   switch (current) {
     case 'login':
-      return <Login onLoggedIn={goAfterLogin} onSignup={() => setScreen('signupProfile')} />
+      return <Login onLoggedIn={() => setScreen('boot')} onSignup={() => setScreen('signupProfile')} />
 
     case 'signupProfile':
       return (
@@ -116,44 +155,92 @@ export default function App() {
           nickname={account!.nickname}
           password={account!.password}
           onBack={() => setScreen('signupProfile')}
-          onDone={goAfterLogin}
-        />
-      )
-
-    case 'persona':
-      return (
-        <Persona
-          personas={options!.personas}
-          selected={choices.personaIds}
-          onChange={(personaIds) => setChoices((c) => ({ ...c, personaIds }))}
-          onBack={logout}
-          onNext={() => setScreen('questions')}
+          onDone={() => {
+            setAccount(null) // 비밀번호를 메모리에 남겨두지 않음
+            setScreen('boot')
+          }}
         />
       )
 
     case 'questions':
       return (
         <Questions
-          questions={options!.questions}
-          answers={choices.answers}
-          onChange={(answers) => setChoices((c) => ({ ...c, answers }))}
-          onBack={() => setScreen('persona')}
-          onDone={() => setScreen('start')}
+          questions={questions}
+          onExit={personaResult ? () => setScreen('home') : logout}
+          onDone={(r) => {
+            setPersonaResult(r)
+            setScreen('personaResult')
+          }}
         />
       )
 
-    case 'start':
+    case 'personaResult':
       return (
-        <Start
-          options={options!}
-          choices={choices}
-          onBack={() => setScreen('questions')}
-          onEdit={() => setScreen('persona')}
-          onStart={() => setScreen('result')}
+        <PersonaResult
+          result={personaResult!}
+          questions={questions}
+          onStart={() => setScreen('home')}
+          onEdit={() => setScreen('questions')}
         />
       )
+
+    case 'home':
+      return (
+        <Home
+          result={personaResult!}
+          questions={questions}
+          lab={lab}
+          onEditAnswers={() => setScreen('questions')}
+          onOpenLab={openLab}
+          onRecommend={() => setScreen('result')}
+          onLogout={logout}
+        />
+      )
+
+    case 'labConsent':
+      return (
+        <LabConsent
+          onBack={() => setScreen('home')}
+          onCreated={(s: LabSession) => {
+            updateLab({ ...s, analysis_id: null })
+            setScreen('labExport')
+          }}
+        />
+      )
+
+    case 'labExport':
+      return <LabExport onBack={() => setScreen('home')} onLater={() => setScreen('home')} onNext={() => setScreen('labMail')} />
+
+    case 'labMail':
+      return (
+        <LabMail
+          session={lab!}
+          onBack={() => setScreen('labExport')}
+          onLater={() => setScreen('home')}
+          onSent={() => {
+            updateLab({ ...lab!, last_status: lab!.last_status ?? 'waiting_email' })
+            setScreen('labStatus')
+          }}
+        />
+      )
+
+    case 'labStatus':
+      return (
+        <LabStatus
+          session={lab!}
+          onBack={() => setScreen('labMail')}
+          onLater={() => setScreen('home')}
+          onStatus={handleLabStatus}
+          onCompleted={handleLabCompleted}
+          onRestart={() => void removeLab('labConsent')}
+          onCancel={() => void removeLab('home')}
+        />
+      )
+
+    case 'labResult':
+      return <LabResult analysisId={lab!.analysis_id!} onDone={() => setScreen('home')} />
 
     case 'result':
-      return <Result choices={choices} personaText={personaText} onBack={() => setScreen('start')} />
+      return <Result onBack={() => setScreen('home')} />
   }
 }

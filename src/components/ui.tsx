@@ -1,13 +1,22 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import { BackIcon } from './icons'
 
-/** 모바일 폭(390px) 화면 틀 */
+/*
+ * 디자인 기준
+ * - 글자: 화면 제목 22 명조 / 큰 제목 26 명조 / 본문 15 / 보조 13 / 캡션 12
+ * - 간격: 4px 단위. 화면 좌우 20, 머리말과 제목 사이 20, 제목과 본문 사이 24
+ * - 모서리: 버튼·입력칸 12, 카드 16, 칩 둥글게
+ * - 버튼 높이: 큰 버튼 52, 작은 버튼 40, 글자 버튼 최소 44(누르기 영역)
+ */
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper'
+
+/** 모바일 폭 화면 틀 */
 export function Screen({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
     <div className="min-h-dvh bg-paper">
-      <main className={`mx-auto flex min-h-dvh w-full max-w-[390px] flex-col font-sans text-ink ${className}`}>
-        {children}
-      </main>
+      <main className={`mx-auto flex min-h-dvh w-full max-w-[420px] flex-col font-sans text-ink ${className}`}>{children}</main>
     </div>
   )
 }
@@ -28,24 +37,24 @@ export function TopBar({
 }) {
   const done = tone === 'wood' ? 'bg-wood' : 'bg-teal'
   return (
-    <div className="-ml-2.5 flex items-center gap-2.5">
+    <div className="-ml-2 flex h-11 items-center gap-3">
       <button
         type="button"
         onClick={onBack}
         aria-label={backLabel}
-        className="flex size-11 items-center justify-center rounded-[10px] text-ink hover:bg-wood-tint/60"
+        className={`flex size-11 shrink-0 items-center justify-center rounded-xl text-ink transition-colors hover:bg-line/50 ${focusRing}`}
       >
         <BackIcon className="size-[22px]" />
       </button>
       {step != null && total != null && (
         <>
-          <div aria-hidden="true" className="flex flex-1 gap-1.5">
+          <div aria-hidden="true" className="flex flex-1 gap-1">
             {Array.from({ length: total }, (_, i) => (
-              <div key={i} className={`h-1 flex-1 rounded-sm ${i < step ? done : 'bg-line'}`} />
+              <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i < step ? done : 'bg-line'}`} />
             ))}
           </div>
-          <span className="text-[13px] font-medium text-muted">
-            {step} / {total}
+          <span className="w-9 text-right text-xs font-medium text-muted tabular-nums">
+            {step}/{total}
           </span>
         </>
       )}
@@ -53,39 +62,89 @@ export function TopBar({
   )
 }
 
-/** 청구기호 느낌의 작은 분류 라벨 */
-export function Tag({ children }: { children: ReactNode }) {
+/** 화면 머리말: 작은 안내 + 제목 + 설명 */
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  className = '',
+}: {
+  eyebrow?: ReactNode
+  title: ReactNode
+  description?: ReactNode
+  className?: string
+}) {
   return (
-    <span className="self-start rounded border border-label bg-cream px-2 py-[3px] text-[11px] tracking-[0.1em] text-wood">
+    <header className={`flex flex-col gap-2 ${className}`}>
+      {eyebrow && <p className="m-0 text-[13px] font-medium text-teal">{eyebrow}</p>}
+      <h1 className="m-0 font-serif text-[22px] leading-[1.4] font-bold tracking-[-0.01em] text-balance text-teal-deep">{title}</h1>
+      {description && <p className="m-0 text-[15px] leading-relaxed text-muted">{description}</p>}
+    </header>
+  )
+}
+
+/** 카드 */
+export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`rounded-2xl border border-line bg-cream ${className}`}>{children}</div>
+}
+
+/** 안내 박스. info는 일반 안내, caution은 주의 */
+export function Notice({ children, tone = 'info', className = '' }: { children: ReactNode; tone?: 'info' | 'caution'; className?: string }) {
+  const color = tone === 'info' ? 'bg-teal-tint/60 text-teal-deep' : 'bg-wood-tint/70 text-ink-2'
+  return <div className={`rounded-xl px-4 py-3 text-[13px] leading-relaxed ${color} ${className}`}>{children}</div>
+}
+
+export function Spinner({ className = 'size-4' }: { className?: string }) {
+  return <span aria-hidden="true" className={`inline-block animate-spin rounded-full border-2 border-current border-r-transparent ${className}`} />
+}
+
+type Variant = 'primary' | 'secondary'
+type Size = 'md' | 'sm'
+
+/** <a>에도 같은 모양을 쓰려고 클래스만 따로 */
+export function buttonClass(variant: Variant = 'primary', size: Size = 'md') {
+  const base = `inline-flex items-center justify-center gap-2 font-bold no-underline transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.99] disabled:pointer-events-none ${focusRing}`
+  const sizes = size === 'md' ? 'h-13 rounded-xl px-5 text-base' : 'h-10 rounded-[10px] px-3.5 text-sm'
+  const variants =
+    variant === 'primary'
+      ? 'bg-teal text-white hover:bg-teal-deep disabled:bg-line disabled:text-muted'
+      : 'border border-line-strong bg-cream text-ink hover:border-label hover:bg-white disabled:opacity-50'
+  return `${base} ${sizes} ${variants}`
+}
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { size?: Size; loading?: boolean }
+
+export function PrimaryButton({ className = '', type = 'button', size = 'md', loading, children, disabled, ...props }: ButtonProps) {
+  return (
+    <button type={type} disabled={disabled || loading} aria-busy={loading || undefined} {...props} className={`${buttonClass('primary', size)} ${className}`}>
+      {loading && <Spinner />}
       {children}
-    </span>
+    </button>
   )
 }
 
-export function Title({ children }: { children: ReactNode }) {
-  return <h1 className="m-0 font-serif text-2xl font-bold text-teal-deep">{children}</h1>
+export function SecondaryButton({ className = '', type = 'button', size = 'md', loading, children, disabled, ...props }: ButtonProps) {
+  return (
+    <button type={type} disabled={disabled || loading} aria-busy={loading || undefined} {...props} className={`${buttonClass('secondary', size)} ${className}`}>
+      {loading && <Spinner />}
+      {children}
+    </button>
+  )
 }
 
-export function Sub({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-sm leading-normal text-muted">{children}</p>
-}
-
-export function PrimaryButton({ className = '', type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+/** 글자만 있는 버튼 (보조 동작) */
+export function TextButton({
+  className = '',
+  tone = 'teal',
+  type = 'button',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'teal' | 'muted' }) {
+  const color = tone === 'teal' ? 'text-teal-deep' : 'text-muted'
   return (
     <button
       type={type}
       {...props}
-      className={`flex h-[54px] items-center justify-center gap-2 rounded-xl bg-teal text-base font-bold text-white transition-colors hover:bg-teal-deep disabled:cursor-not-allowed disabled:bg-label ${className}`}
-    />
-  )
-}
-
-export function SecondaryButton({ className = '', type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type={type}
-      {...props}
-      className={`flex h-[54px] items-center justify-center rounded-xl border-[1.5px] border-label text-[15px] font-bold text-ink-2 transition-colors hover:bg-wood-tint/50 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex min-h-11 items-center rounded-md text-sm font-medium underline-offset-4 hover:underline disabled:opacity-50 ${color} ${focusRing} ${className}`}
     />
   )
 }
@@ -98,20 +157,26 @@ type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
 }
 
 export function TextField({ id, label, helper, trailing, className = '', ...props }: FieldProps) {
+  const helperId = helper ? `${id}-help` : undefined
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <label htmlFor={id} className="text-[13px] font-medium text-ink-2">
         {label}
       </label>
       <div className="flex gap-2">
         <input
           id={id}
+          aria-describedby={helperId}
           {...props}
-          className={`h-[50px] min-w-0 flex-1 rounded-[10px] border-[1.5px] border-line-strong bg-cream px-3.5 text-[15px] text-ink outline-none placeholder:text-muted/70 focus:border-teal ${className}`}
+          className={`h-13 min-w-0 flex-1 rounded-xl border border-line-strong bg-cream px-4 text-[15px] text-ink transition-[border-color,box-shadow] outline-none placeholder:text-muted/60 hover:border-label focus:border-teal focus:ring-3 focus:ring-teal/15 ${className}`}
         />
         {trailing}
       </div>
-      {helper && <div className="text-[12.5px] text-muted">{helper}</div>}
+      {helper && (
+        <div id={helperId} className="text-[13px] leading-normal text-muted">
+          {helper}
+        </div>
+      )}
     </div>
   )
 }
@@ -119,9 +184,50 @@ export function TextField({ id, label, helper, trailing, className = '', ...prop
 export function ErrorText({ children }: { children: ReactNode }) {
   if (!children) return null
   return (
-    <p role="alert" className="m-0 text-[13px] text-danger">
+    <p role="alert" className="m-0 text-[13px] leading-normal text-danger">
       {children}
     </p>
+  )
+}
+
+/** 불러오는 중 화면 */
+export function LoadingScreen({ label = '불러오는 중…' }: { label?: string }) {
+  return (
+    <Screen className="items-center justify-center gap-3 px-5">
+      <Spinner className="size-6 text-teal" />
+      <p role="status" className="m-0 text-sm text-muted">
+        {label}
+      </p>
+    </Screen>
+  )
+}
+
+/** 오류 화면: 메시지 + 다시 시도 + 보조 동작 */
+export function ErrorScreen({
+  message,
+  onRetry,
+  retryLabel = '다시 시도',
+  secondaryLabel,
+  onSecondary,
+}: {
+  message: string
+  onRetry: () => void
+  retryLabel?: string
+  secondaryLabel?: string
+  onSecondary?: () => void
+}) {
+  return (
+    <Screen className="items-center justify-center gap-4 px-8 text-center">
+      <ErrorText>{message}</ErrorText>
+      <SecondaryButton size="sm" onClick={onRetry}>
+        {retryLabel}
+      </SecondaryButton>
+      {secondaryLabel && onSecondary && (
+        <TextButton tone="muted" onClick={onSecondary}>
+          {secondaryLabel}
+        </TextButton>
+      )}
+    </Screen>
   )
 }
 
@@ -130,21 +236,11 @@ export function Ribbon({ label, tone }: { label: string; tone: 'teal' | 'wood' }
   return (
     <div
       aria-hidden="true"
-      className={`absolute -top-px right-[18px] box-border flex h-[42px] w-[30px] justify-center pt-1.5 text-[13px] font-bold text-white ${tone === 'teal' ? 'bg-teal' : 'bg-wood'}`}
-      style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%)' }}
+      className={`absolute -top-px right-4 flex h-10 w-7 justify-center pt-1.5 text-xs font-bold text-white ${tone === 'teal' ? 'bg-teal' : 'bg-wood'}`}
+      style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)' }}
     >
       {label}
     </div>
-  )
-}
-
-/** 도서관 목록 카드의 구멍 */
-export function CardHole() {
-  return (
-    <div
-      aria-hidden="true"
-      className="absolute bottom-2.5 left-1/2 size-3 -translate-x-1/2 rounded-full border border-label bg-paper"
-    />
   )
 }
 
@@ -168,15 +264,15 @@ const SPINES: Spine[] = [
   { w: 16, h: 86, c: '#C9B28E' },
 ]
 
-/** 책장 장식. scale로 크기 조절 */
-export function BookShelf({ scale = 1, count = SPINES.length, withShelf = true }: { scale?: number; count?: number; withShelf?: boolean }) {
+/** 책장 장식 (로그인·메인에서만 사용) */
+export function BookShelf({ scale = 1, count = SPINES.length }: { scale?: number; count?: number }) {
   return (
     <div aria-hidden="true">
-      <div className="flex items-end gap-[3px] px-[22px]" style={{ height: 116 * scale }}>
+      <div className="flex items-end gap-[3px] px-5" style={{ height: 112 * scale }}>
         {SPINES.slice(0, count).map((s, i) => (
           <div
             key={i}
-            className="box-border rounded-t-[2px]"
+            className="rounded-t-[2px]"
             style={{
               width: s.w * scale,
               height: s.h * scale,
@@ -193,44 +289,27 @@ export function BookShelf({ scale = 1, count = SPINES.length, withShelf = true }
           </div>
         ))}
       </div>
-      {withShelf && (
-        <>
-          <div className="h-2.5 bg-shelf" />
-          <div className="h-9 bg-[#E6D8C2]" />
-        </>
-      )}
+      <div className="h-2 bg-shelf" />
+      <div className="h-6 bg-[#E6D8C2]" />
     </div>
   )
 }
 
-/** 회원증 카드 */
+/** 회원증 카드 (회원가입 1단계) */
 export function LibraryCard({ name, sub }: { name: string; sub: string }) {
   const bars = [2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1, 2, 1, 3, 1, 2, 2, 1, 3, 1]
   return (
-    <div className="flex h-[150px] flex-col justify-between rounded-[14px] bg-teal px-5 py-[18px] text-white">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] tracking-[0.18em] text-teal-tint">GIST LIBRARY</span>
-        <span className="rounded border border-[#8DB5AF] px-2 py-[3px] text-xs text-teal-tint">열람 회원증</span>
-      </div>
+    <div className="flex h-36 flex-col justify-between rounded-2xl bg-teal px-5 py-4 text-white">
+      <span className="text-xs text-teal-tint">GIST 도서관 열람 회원증</span>
       <div className="truncate font-serif text-[22px] font-bold">{name}</div>
       <div className="flex items-end justify-between gap-3">
-        <div aria-hidden="true" className="flex h-[26px] items-stretch gap-0.5 rounded-[3px] bg-cream px-1.5 py-1">
+        <div aria-hidden="true" className="flex h-6 items-stretch gap-0.5 rounded-[3px] bg-cream px-1.5 py-1">
           {bars.map((w, i) => (
             <div key={i} className="bg-ink" style={{ width: w }} />
           ))}
         </div>
         <span className="truncate text-xs text-teal-tint">{sub}</span>
       </div>
-    </div>
-  )
-}
-
-/** 날짜 도장 */
-export function DateStamp({ date = new Date() }: { date?: Date }) {
-  const text = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-  return (
-    <div className="-rotate-[8deg] rounded-md border-2 border-wood px-2 py-1 text-xs font-bold tracking-[0.06em] text-wood">
-      {text}
     </div>
   )
 }

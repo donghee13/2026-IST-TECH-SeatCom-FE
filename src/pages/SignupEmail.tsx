@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { login, sendEmailCode, signup, verifyEmailCode } from '../api'
-import { CheckIcon, MailIcon } from '../components/icons'
-import { CardHole, ErrorText, PrimaryButton, Screen, Sub, Tag, TextField, Title, TopBar } from '../components/ui'
+import { CheckIcon } from '../components/icons'
+import { ErrorText, Notice, PageHeader, PrimaryButton, Screen, SecondaryButton, TextButton, TextField, TopBar } from '../components/ui'
 
 const CODE_LENGTH = 6
 const CODE_SECONDS = 5 * 60
@@ -88,9 +88,9 @@ export default function SignupEmail({
     setSubmitting(true)
     setError('')
     try {
-      await verifyEmailCode(email, code) // 인증코드 확인
-      await signup({ email, code, nickname, password }) // 가입
-      await login(nickname, password) // 바로 로그인
+      await verifyEmailCode(email, code)
+      await signup({ email, code, nickname, password })
+      await login(nickname, password)
       onDone()
     } catch (err) {
       setError(err instanceof Error ? err.message : '가입에 실패했어요.')
@@ -100,41 +100,34 @@ export default function SignupEmail({
   }
 
   return (
-    <Screen className="px-6 pt-4 pb-7">
-      <TopBar onBack={onBack} step={2} total={2} tone="wood" backLabel="닉네임 입력으로 돌아가기" />
+    <Screen className="px-5 pt-3 pb-6">
+      <TopBar onBack={onBack} step={2} total={2} backLabel="닉네임 입력으로 돌아가기" />
 
-      <div className="mt-[18px] flex flex-col gap-2">
-        <Tag>MEMBERSHIP · 이메일 인증</Tag>
-        <Title>이메일로 인증해 주세요</Title>
-        <Sub>
-          인증은 처음 가입할 때 한 번만 해요.
-          <br />
-          로그인할 때는 닉네임과 비밀번호만 써요.
-        </Sub>
-      </div>
+      <PageHeader
+        className="mt-5"
+        eyebrow="회원가입"
+        title="이메일로 인증해 주세요"
+        description="인증은 처음 가입할 때 한 번만 해요. 로그인할 때는 닉네임과 비밀번호만 써요."
+      />
 
-      <div className="mt-7 flex flex-col gap-[22px]">
+      <div className="mt-6 flex flex-col gap-6">
         <TextField
           id="signup-email"
           label="이메일"
           type="email"
+          inputMode="email"
           placeholder="이메일 입력"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           trailing={
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending}
-              className="h-[50px] whitespace-nowrap rounded-[10px] border-[1.5px] border-teal px-3.5 text-sm font-bold text-teal transition-colors hover:bg-teal-tint disabled:opacity-50"
-            >
-              {sending ? '보내는 중…' : sent ? '다시 받기' : '인증코드 받기'}
-            </button>
+            <SecondaryButton onClick={handleSend} loading={sending} className="shrink-0 px-4 text-sm">
+              {sent ? '다시 받기' : '인증코드 받기'}
+            </SecondaryButton>
           }
           helper={
             sent ? (
-              <span className="flex items-center gap-1.5 text-teal">
+              <span className="inline-flex items-center gap-1.5 text-teal">
                 <CheckIcon className="size-3.5" />
                 인증코드를 보냈어요. 메일함을 확인해 주세요.
               </span>
@@ -144,9 +137,9 @@ export default function SignupEmail({
 
         {sent && (
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-2 flex w-full justify-between p-0 text-[13px] font-medium text-ink-2">
+            <legend className="mb-2 flex w-full items-center justify-between p-0 text-[13px] font-medium text-ink-2">
               <span>인증코드 6자리</span>
-              <span className={`font-bold ${expired ? 'text-danger' : 'text-wood'}`}>{expired ? '시간 초과' : timeText}</span>
+              <span className={`tabular-nums ${expired ? 'text-danger' : 'text-muted'}`}>{expired ? '시간 초과' : timeText}</span>
             </legend>
             <div className="grid grid-cols-6 gap-2">
               {digits.map((d, i) => (
@@ -164,7 +157,9 @@ export default function SignupEmail({
                   onChange={(e) => setDigit(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
                   onPaste={handlePaste}
-                  className={`h-14 min-w-0 rounded-[10px] border-[1.5px] text-center text-[22px] font-bold text-teal-deep outline-none focus:border-teal ${d ? 'border-teal bg-white' : 'border-line-strong bg-cream'}`}
+                  className={`h-14 min-w-0 rounded-xl border text-center text-[22px] font-bold text-teal-deep tabular-nums transition-[border-color,box-shadow] outline-none focus:border-teal focus:ring-3 focus:ring-teal/15 ${
+                    d ? 'border-teal bg-white' : 'border-line-strong bg-cream'
+                  }`}
                 />
               ))}
             </div>
@@ -174,18 +169,17 @@ export default function SignupEmail({
       </div>
 
       {sent && (
-        <div className="relative mt-6 flex items-start gap-2.5 rounded-md border border-line bg-cream px-4 pt-3.5 pb-[22px]">
-          <MailIcon className="size-5 shrink-0 text-wood" />
-          <span className="text-[13px] leading-normal text-muted">
-            메일이 오지 않으면 스팸함을 확인하거나 위의 다시 받기를 눌러 주세요.
-          </span>
-          <CardHole />
-        </div>
+        <Notice className="mt-6 flex items-center justify-between gap-3">
+          <span>메일이 오지 않으면 스팸함을 확인해 주세요.</span>
+          <TextButton onClick={handleSend} disabled={sending} className="shrink-0 font-bold">
+            다시 받기
+          </TextButton>
+        </Notice>
       )}
 
       <div className="min-h-6 flex-1" />
-      <PrimaryButton onClick={handleSubmit} disabled={!sent || code.length < CODE_LENGTH || submitting}>
-        {submitting ? '가입하는 중…' : '인증하고 가입하기'}
+      <PrimaryButton onClick={handleSubmit} disabled={!sent || code.length < CODE_LENGTH} loading={submitting} className="w-full">
+        인증하고 가입하기
       </PrimaryButton>
     </Screen>
   )

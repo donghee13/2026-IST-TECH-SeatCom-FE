@@ -1,107 +1,159 @@
-import { useState } from 'react'
-import { QUESTION_UI } from '../data/options'
-import type { PreferenceQuestion } from '../types'
-import { CardHole, PrimaryButton, Screen, SecondaryButton, Tag, TopBar } from '../components/ui'
+import { useEffect, useState } from 'react'
+import { analyzePersona, getPersonaAnswers, savePersonaAnswer } from '../api'
+import type { PersonaQuestion, PersonaResult } from '../types'
+import { CheckIcon } from '../components/icons'
+import { ErrorScreen, ErrorText, LoadingScreen, PrimaryButton, Screen, Spinner, TopBar } from '../components/ui'
 
+/** 페르소나 질문을 하나씩 보여주고, 고를 때마다 바로 저장(PUT) */
 export default function Questions({
   questions,
-  answers,
-  onChange,
-  onBack,
+  onExit,
   onDone,
 }: {
-  questions: PreferenceQuestion[] // B12에서 받은 목록
-  answers: Record<string, string> // questionId → optionId
-  onChange: (next: Record<string, string>) => void
-  onBack: () => void
-  onDone: () => void
+  questions: PersonaQuestion[]
+  onExit: () => void // 첫 질문에서 뒤로 가기
+  onDone: (result: PersonaResult) => void
 }) {
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [idx, setIdx] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [error, setError] = useState('')
 
-  // 질문이 하나도 없으면 바로 다음 단계로
+  // 저장된 답 불러와서 첫 번째 안 푼 질문부터 시작
+  useEffect(() => {
+    let cancelled = false
+    getPersonaAnswers()
+      .then((r) => {
+        if (cancelled) return
+        const saved: Record<string, string> = {}
+        for (const [k, v] of Object.entries(r.answers ?? {})) if (v) saved[k] = v
+        setAnswers(saved)
+        const firstEmpty = questions.findIndex((q) => !saved[q.id])
+        setIdx(firstEmpty === -1 ? questions.length - 1 : firstEmpty)
+      })
+      .catch(() => {
+        // 불러오기 실패해도 처음부터 답하면 됨
+      })
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [questions])
+
   if (questions.length === 0) {
-    return (
-      <Screen className="items-center justify-center gap-4 px-5">
-        <p className="m-0 text-sm text-muted">추가 질문이 없어요.</p>
-        <PrimaryButton className="w-full" onClick={onDone}>
-          다음
-        </PrimaryButton>
-      </Screen>
-    )
+    return <ErrorScreen message="질문 목록이 비어 있어요. 백엔드 응답을 확인해 주세요." onRetry={onExit} retryLabel="돌아가기" />
+  }
+  if (loading) return <LoadingScreen />
+
+  const q = questions[idx]
+  const picked = answers[q.id]
+  const isLast = idx === questions.length - 1
+
+  async function pick(value: string) {
+    if (value === answers[q.id]) return
+    const before = answers[q.id]
+    setAnswers((a) => ({ ...a, [q.id]: value })) // 화면에는 먼저 반영
+    setSaving(true)
+    setError('')
+    try {
+      await savePersonaAnswer(q.id, value)
+    } catch (e) {
+      setAnswers((a) => {
+        const next = { ...a }
+        if (before) next[q.id] = before
+        else delete next[q.id]
+        return next
+      })
+      setError(e instanceof Error ? e.message : '답을 저장하지 못했어요.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const q = questions[Math.min(idx, questions.length - 1)]
-  const picked = answers[q.questionId]
-  const isLast = idx >= questions.length - 1
-  const ui = QUESTION_UI[q.questionId]
+  async function finish() {
+    setAnalyzing(true)
+    setError('')
+    try {
+      onDone(await analyzePersona())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '결과를 만들지 못했어요.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   return (
-    <Screen className="px-5 pt-4 pb-7">
-      <TopBar onBack={onBack} step={2} total={3} backLabel="페르소나 선택으로 돌아가기" />
+    <Screen className="px-5 pt-3 pb-6">
+      <TopBar
+        onBack={() => (idx > 0 ? setIdx(idx - 1) : onExit())}
+        step={idx + 1}
+        total={questions.length}
+        backLabel={idx > 0 ? '이전 질문' : '나가기'}
+      />
 
-      <div className="mt-[18px] flex items-center justify-between">
-        <Tag>STEP 2 · 세부 취향</Tag>
-        <div className="flex items-center gap-2.5">
-          <div aria-hidden="true" className="flex gap-[5px]">
-            {questions.map((item, i) => (
-              <div key={item.questionId} className={`size-2 rounded-full ${i <= idx ? 'bg-teal' : 'bg-line'}`} />
-            ))}
-          </div>
-          <span className="text-[13px] font-medium text-muted">
-            질문 {idx + 1} / {questions.length}
-          </span>
-        </div>
-      </div>
-
-      <div className="relative mt-5 flex flex-col gap-2.5 rounded-lg border border-label bg-cream px-[22px] pt-[22px] pb-[34px]">
-        <span className="self-start rounded border border-label px-2 py-0.5 text-xs tracking-[0.08em] text-wood">
-          Q{idx + 1}
-        </span>
-        <h1 id="question-title" className="m-0 font-serif text-[26px] leading-[1.35] font-bold text-teal-deep">
-          {ui?.text ?? q.label}
+      <header className="mt-6 flex flex-col gap-2">
+        <p className="m-0 text-[13px] font-medium text-teal">열람 성향 질문</p>
+        <h1 id="question-title" className="m-0 font-serif text-[24px] leading-[1.4] font-bold tracking-[-0.01em] text-balance text-teal-deep">
+          {q.question}
         </h1>
-        {ui?.hint && <p className="m-0 text-[13.5px] leading-normal text-muted">{ui.hint}</p>}
-        <CardHole />
-      </div>
+      </header>
 
-      <div role="radiogroup" aria-labelledby="question-title" className="mt-4 flex flex-col gap-2.5">
+      <div role="radiogroup" aria-labelledby="question-title" className="mt-8 flex flex-col gap-3">
         {q.options.map((o) => {
-          const on = picked === o.optionId
+          const on = picked === o.value
           return (
             <button
-              key={o.optionId}
+              key={o.value}
               type="button"
               role="radio"
               aria-checked={on}
-              onClick={() => onChange({ ...answers, [q.questionId]: o.optionId })}
-              className={`flex min-h-[60px] items-center justify-between rounded-[14px] border-[1.5px] px-[18px] text-left text-base font-medium transition-colors ${
-                on ? 'border-teal bg-teal-tint' : 'border-line bg-cream hover:border-label'
+              disabled={analyzing}
+              onClick={() => pick(o.value)}
+              className={`flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left text-base transition-[border-color,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:outline-none ${
+                on ? 'border-teal bg-teal-tint/50 font-bold text-teal-deep' : 'border-line bg-cream font-medium hover:border-label hover:bg-white'
               }`}
             >
               <span>{o.label}</span>
               <span
-                className={`size-[22px] shrink-0 rounded-full bg-white ${on ? 'border-[7px] border-teal' : 'border-[1.5px] border-label'}`}
-              />
+                aria-hidden="true"
+                className={`flex size-5 shrink-0 items-center justify-center rounded-full transition-colors ${on ? 'bg-teal text-white' : 'border border-label bg-white'}`}
+              >
+                {on && <CheckIcon className="size-3" strokeWidth={3} />}
+              </span>
             </button>
           )
         })}
       </div>
 
-      <div className="min-h-6 flex-1" />
-      <div className="flex gap-2.5">
-        {idx > 0 && (
-          <SecondaryButton className="flex-1" onClick={() => setIdx(idx - 1)}>
-            이전
-          </SecondaryButton>
+      <div className="mt-3 min-h-5">
+        {error ? (
+          <ErrorText>{error}</ErrorText>
+        ) : (
+          <p aria-live="polite" className="m-0 flex items-center gap-1.5 text-xs text-muted">
+            {saving ? (
+              <>
+                <Spinner className="size-3" /> 저장하는 중
+              </>
+            ) : picked ? (
+              '선택이 저장됐어요'
+            ) : (
+              ''
+            )}
+          </p>
         )}
-        <PrimaryButton
-          className="flex-[2]"
-          disabled={picked === undefined}
-          onClick={() => (isLast ? onDone() : setIdx(idx + 1))}
-        >
-          {isLast ? '답변 완료' : '다음 질문'}
-        </PrimaryButton>
       </div>
+
+      <div className="min-h-6 flex-1" />
+      <PrimaryButton
+        disabled={!picked || saving}
+        loading={analyzing}
+        onClick={() => (isLast ? finish() : setIdx(idx + 1))}
+        className="w-full"
+      >
+        {isLast ? '답변 완료' : '다음'}
+      </PrimaryButton>
     </Screen>
   )
 }

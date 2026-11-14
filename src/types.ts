@@ -1,39 +1,116 @@
-// 백엔드 명세(B01~B12)에 맞춘 데이터 모양
+// 백엔드 명세 v2.1 (FastAPI)에 맞춘 데이터 모양
+// 명세에 응답 모양이 없어서 v2.0 문서의 응답 예시를 기준으로 했어요.
 
-/** 사용자가 고른 선택지 ID (B05·B06·B08에서 그대로 주고받음) */
-export interface Choices {
-  personaIds: string[]
-  answers: Record<string, string> // questionId → optionId
+// ---------- 페르소나 4문항 ----------
+export interface PersonaOption {
+  label: string // 화면 문구, 예: "꼭 필요해요"
+  value: string // 서버로 보내는 값, 예: "required"
 }
 
-// ---------- B12 선택지 목록 ----------
-export interface PreferencePersona {
-  personaId: string
-  label: string
-  description?: string | null
+export interface PersonaQuestion {
+  id: string // question_id
+  order: number
+  question: string
+  options: PersonaOption[]
 }
 
-export interface PreferenceQuestion {
-  questionId: string
-  label: string
-  options: { optionId: string; label: string }[]
+export interface PersonaQuestionsResponse {
+  version?: string
+  required_count?: number
+  questions: PersonaQuestion[]
 }
 
-export interface PreferenceOptions {
-  optionsVersion: string
-  personas: PreferencePersona[]
-  questions: PreferenceQuestion[]
+/** PUT /persona/answers/{question_id} 응답 */
+export interface SaveAnswerResponse {
+  question_id: string
+  answer: string
+  saved: boolean
+  answered_count: number
+  required_count: number
+  can_analyze: boolean
 }
 
-// ---------- B05·B06 저장된 취향 ----------
-export interface SavedPreferences {
-  revision: number
-  choices: Choices
+/** GET /persona/answers 응답. 답하지 않은 질문은 null */
+export interface SavedAnswersResponse {
+  answers: Record<string, string | null>
+  answered_count: number
+  required_count: number
+  can_analyze: boolean
 }
 
-// ---------- B03 좌석도 ----------
+/** POST /persona/analyze, GET /persona/result 응답 */
+export interface PersonaResult {
+  analysis_id: string
+  analysis_method: string
+  status: string // completed
+  seat_preferences: Record<string, string | null>
+  seat_recommendation?: string | null
+  source?: string
+  completed_at?: string
+}
+
+// ---------- 실험실 (카톡 분석) ----------
+export type LabStatusValue =
+  | 'waiting_email'
+  | 'verifying_identity'
+  | 'verified'
+  | 'analyzing'
+  | 'completed'
+  | 'rejected'
+  | 'failed'
+  | 'expired'
+
+/** POST /lab/sessions 응답 */
+export interface LabSession {
+  upload_id: string
+  upload_code: string
+  recipient_email: string
+  mail_subject: string
+  target_name: string
+  status: LabStatusValue
+  expires_at?: string
+  poll_interval_seconds?: number
+}
+
+/** GET /lab/sessions/{upload_id}/status 응답 */
+export interface LabStatus {
+  upload_id: string
+  status: LabStatusValue
+  email_received: boolean
+  filename?: string | null
+  identity: { matched: boolean | null; verification: string; result?: string }
+  analysis: { analysis_id: string | null; status: string; model?: string }
+  message?: string
+  error?: { code: string; message: string }
+}
+
+export interface LabPreference {
+  preference: string // unknown이면 판단 불가
+  confidence: number // 0~1
+  inference_type: string // explicit, contextual, hypothesis, unknown
+  reason: string
+}
+
+/** GET /lab/analyses/{analysis_id} 응답 */
+export interface LabAnalysis {
+  analysis_id: string
+  analysis_method: string
+  status: string
+  source?: string
+  analysis: {
+    participant_id?: string
+    behavioral_summary?: string
+    preferences: Record<string, LabPreference>
+    evidence?: { feature: string; message_id?: string; reason: string }[]
+    seat_recommendation?: string
+    follow_up_question?: string | null
+  }
+  completed_at?: string
+}
+
+// ---------- 좌석 추천 (v2.1 명세에는 없음. 백엔드가 다시 만들면 연결) ----------
 export interface Box {
-  x: number // 0~1, 왼쪽 위 기준
+  x: number
   y: number
   width: number
   height: number
@@ -47,7 +124,7 @@ export interface MapSeat extends Box {
 
 export interface Facility {
   facilityId: string
-  type: string // toilet, entrance, window, outlet 등
+  type: string
   geometry: Box
   verification: 'verified' | 'unverified'
 }
@@ -64,7 +141,6 @@ export interface RoomMap {
   facilities: Facility[]
 }
 
-// ---------- B04 현황 ----------
 export type SeatStateValue = 'available' | 'occupied' | 'reserved' | 'blocked' | 'unknown'
 
 export interface RoomAvailability {
@@ -73,7 +149,6 @@ export interface RoomAvailability {
   seatStates: { seatId: string; state: SeatStateValue }[]
 }
 
-// ---------- B08 추천 결과 ----------
 export interface Reason {
   code: string
   featureId: string | null
@@ -105,10 +180,9 @@ export interface Recommendation {
     results: RecommendationResult[]
     warnings: string[]
   }
-  displayNames: Record<string, string> // id → 화면 표시 이름
+  displayNames: Record<string, string>
 }
 
-// ---------- B09 이벤트 (eventId, occurredAt은 api가 붙임) ----------
 export type RecommendationEvent =
   | { type: 'recommendationExposed'; visibleTargetIds: string[] }
   | { type: 'candidateSelected'; targetId: string; origin: 'recommendation' | 'outsideRecommendations' }

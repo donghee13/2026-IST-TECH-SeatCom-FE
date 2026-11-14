@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { ErrorText, LibraryCard, PrimaryButton, Screen, Sub, Tag, TextField, Title, TopBar } from '../components/ui'
+import { ErrorText, LibraryCard, PageHeader, PrimaryButton, Screen, TextField, TopBar } from '../components/ui'
 
-/** 회원가입 1단계: 닉네임 + 비밀번호 입력 (가입은 2단계 이메일 인증 후에 함) */
+/** 회원가입 1단계: 닉네임 + 비밀번호 (가입은 2단계 이메일 인증 뒤에 함) */
 export default function SignupProfile({
   initialNickname = '',
   onBack,
@@ -26,20 +26,16 @@ export default function SignupProfile({
   }
 
   return (
-    <Screen className="px-6 pt-4 pb-7">
-      <TopBar onBack={onBack} step={1} total={2} tone="wood" backLabel="로그인으로 돌아가기" />
+    <Screen className="px-5 pt-3 pb-6">
+      <TopBar onBack={onBack} step={1} total={2} backLabel="로그인으로 돌아가기" />
 
-      <div className="mt-[18px] flex flex-col gap-2">
-        <Tag>MEMBERSHIP · 회원증 발급</Tag>
-        <Title>회원증을 만들어요</Title>
-        <Sub>로그인할 때 쓸 닉네임과 비밀번호를 정해 주세요.</Sub>
+      <PageHeader className="mt-5" eyebrow="회원가입" title="회원증을 만들어요" description="로그인할 때 쓸 닉네임과 비밀번호를 정해 주세요." />
+
+      <div className="mt-6">
+        <LibraryCard name={nickname.trim() || '닉네임'} sub="이메일 인증 전" />
       </div>
 
-      <div className="mt-[18px]">
-        <LibraryCard name={nickname.trim() || '[닉네임]'} sub="이메일 인증 전" />
-      </div>
-
-      <form id="signup-form" onSubmit={handleSubmit} className="mt-[22px] flex flex-col gap-4">
+      <form id="signup-form" onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-4">
         <TextField
           id="signup-nickname"
           label="닉네임"
@@ -62,7 +58,7 @@ export default function SignupProfile({
       </form>
 
       <div className="min-h-6 flex-1" />
-      <PrimaryButton type="submit" form="signup-form">
+      <PrimaryButton type="submit" form="signup-form" className="w-full">
         다음
       </PrimaryButton>
     </Screen>
