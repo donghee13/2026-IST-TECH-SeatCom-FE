@@ -30,9 +30,6 @@ export default function Login({ onLoggedIn, onSignup }: { onLoggedIn: () => void
   return (
     <Screen>
       <div className="flex flex-col gap-3.5 px-7 pt-16">
-        <span className="self-start rounded border border-label bg-cream px-2.5 py-[5px] text-xs tracking-[0.08em] text-muted">
-          GIST 도서관 · 열람실
-        </span>
         <div className="flex items-center gap-3">
           <div className="flex size-12 items-center justify-center rounded-xl bg-teal text-white">
             <BookIcon className="size-7" />
