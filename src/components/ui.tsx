@@ -80,7 +80,7 @@ function BrandPanel() {
             <br />
             고민하지 말고 골라 보세요
           </h2>
-          <p className="m-0 text-base leading-relaxed text-teal-tint">STadium 도서관 열람실에서 나에게 맞는 자리를 찾아 드려요.</p>
+          <p className="m-0 text-base leading-relaxed text-teal-tint">IT Arena 도서관 열람실에서 나에게 맞는 자리를 찾아 드려요.</p>
         </div>
         <ul className="m-0 flex max-w-[520px] list-none flex-col gap-5 p-0">
           {points.map(([t, d]) => (
@@ -415,7 +415,7 @@ export function Footer({ className = '' }: { className?: string }) {
   return (
     <footer className={`border-t border-line px-5 py-5 font-sans text-xs text-muted ${className}`}>
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <span>SeatCom · STadium 도서관 자리 추천</span>
+        <span>SeatCom · IT Arena 도서관 자리 추천</span>
         <nav aria-label="만든 사람들" className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-medium text-ink-2">만든 사람들</span>
           {MAKERS.map((m) => (
@@ -581,7 +581,7 @@ export function LibraryCard({ name, sub }: { name: string; sub: string }) {
   const bars = [2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1, 2, 1, 3, 1, 2, 2, 1, 3, 1]
   return (
     <div className="flex h-36 flex-col justify-between rounded-2xl bg-teal px-5 py-4 text-white">
-      <span className="text-xs text-teal-tint">STadium 도서관 열람 회원증</span>
+      <span className="text-xs text-teal-tint">IT Arena 도서관 열람 회원증</span>
       <div className="truncate font-serif text-[22px] font-bold">{name}</div>
       <div className="flex items-end justify-between gap-3">
         <div aria-hidden="true" className="flex h-6 items-stretch gap-0.5 rounded-[3px] bg-cream px-1.5 py-1">

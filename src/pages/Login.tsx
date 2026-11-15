@@ -37,7 +37,7 @@ export default function Login({ onLoggedIn, onSignup, onForgot }: { onLoggedIn: 
           <h1 className="m-0 font-serif text-[32px] font-bold tracking-[-0.02em] text-teal-deep">SeatCom</h1>
         </div>
         <p className="m-0 text-[15px] leading-relaxed text-muted">
-          STadium 도서관 열람실에서
+          IT Arena 도서관 열람실에서
           <br />
           나에게 맞는 자리를 골라드려요.
         </p>
