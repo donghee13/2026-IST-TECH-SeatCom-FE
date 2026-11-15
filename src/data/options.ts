@@ -4,12 +4,21 @@
  */
 import type { PersonaQuestion } from '../types'
 
-/** 고른 답(value)을 화면 문구(label)로 바꿔서 [{질문, 답}] 목록으로 */
+/** 설문 답을 한눈에 읽히는 칩 문구로 (예: '네' → '콘센트 필요') */
+const ANSWER_CHIP: Record<string, Record<string, string>> = {
+  outlet: { required: '콘센트·노트북 필요', not_required: '콘센트 없어도 괜찮아요' },
+  hvac_proximity: { near: '에어컨 가까이', not_near: '에어컨에서 멀리', no_preference: '에어컨 상관없음' },
+  noise_sensitivity: { high: '소음에 많이 민감', low: '소음에 조금 민감', none: '소음 괜찮아요' },
+  partition: { yes: '칸막이 있는 자리', no: '트인 자리', no_preference: '칸막이 상관없음' },
+}
+
+/** 고른 답(value)을 화면 문구(label)로 바꿔서 [{질문, 답, 칩 문구}] 목록으로 */
 export function describeAnswers(questions: PersonaQuestion[], prefs: Record<string, string | null>) {
   return questions.map((q) => {
     const value = prefs[q.id]
     const label = q.options.find((o) => o.value === value)?.label ?? value ?? '-'
-    return { id: q.id, question: q.question, answer: label }
+    const chip = (value && ANSWER_CHIP[q.id]?.[value]) || `${q.question.replace(/\?.*$/, '')}: ${label}`
+    return { id: q.id, question: q.question, answer: label, chip }
   })
 }
 
@@ -19,13 +28,13 @@ export const EXPORT_STEPS: Record<'android' | 'ios', string[]> = {
     '카카오톡에서 분석할 대화방에 들어가요',
     '오른쪽 위 메뉴(≡) → 설정(톱니바퀴)을 눌러요',
     '대화 내용 내보내기를 눌러요',
-    '텍스트만 보내기를 고르고, 공유 앱에서 Gmail을 골라요',
+    '텍스트만 보내기를 고르고, 공유 화면에서 \'내 파일\'(기기에 저장)을 골라요',
   ],
   ios: [
     '카카오톡에서 분석할 대화방에 들어가요',
     '오른쪽 위 메뉴(≡) → 설정(톱니바퀴)을 눌러요',
     '대화 내용 내보내기를 눌러요',
-    '텍스트 메시지만 보내기를 고르고, 공유 앱에서 Gmail을 골라요',
+    '텍스트 메시지만 보내기를 고르고, 공유 화면에서 \'파일에 저장\'을 골라요',
   ],
 }
 
@@ -60,11 +69,24 @@ export const LAB_VALUE_LABEL: Record<string, string> = {
   no_preference: '상관없음',
 }
 
+/** '별로예요' 이유. 고르면 다음 추천부터 그 방향으로 취향을 바로 보정해요(그냥 마음에 안 들어요는 제외만) */
 export const REJECT_REASONS = [
   '너무 추울 것 같아요',
+  '너무 더울 것 같아요',
   '콘센트가 없어요',
   '시끄러울 것 같아요',
   '창가가 아니에요',
+  '칸막이가 없어요',
+  '너무 어두워요',
+  '너무 밝아요',
+  '책상이 좁아요',
   '입구에서 너무 멀어요',
   '그냥 마음에 안 들어요',
 ]
+
+/** 취향 정보 출처 이름 */
+export const SOURCE_LABEL: Record<string, string> = {
+  persona: '4문항 설문',
+  kakao_lab: '카톡 분석',
+  explicit: '직접 설정',
+}

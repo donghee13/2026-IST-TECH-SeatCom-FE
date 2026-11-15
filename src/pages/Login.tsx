@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { login } from '../api'
 import { BookIcon } from '../components/icons'
-import { BookShelf, ErrorText, PrimaryButton, Screen, TextButton, TextField } from '../components/ui'
+import { BookShelf, ErrorText, PasswordField, PrimaryButton, Screen, TextButton, TextField } from '../components/ui'
 
-export default function Login({ onLoggedIn, onSignup }: { onLoggedIn: () => void; onSignup: () => void }) {
+export default function Login({ onLoggedIn, onSignup, onForgot }: { onLoggedIn: () => void; onSignup: () => void; onForgot: () => void }) {
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -37,7 +37,7 @@ export default function Login({ onLoggedIn, onSignup }: { onLoggedIn: () => void
           <h1 className="m-0 font-serif text-[32px] font-bold tracking-[-0.02em] text-teal-deep">SeatCom</h1>
         </div>
         <p className="m-0 text-[15px] leading-relaxed text-muted">
-          GIST 도서관 열람실에서
+          STadium 도서관 열람실에서
           <br />
           나에게 맞는 자리를 골라드려요.
         </p>
@@ -52,29 +52,38 @@ export default function Login({ onLoggedIn, onSignup }: { onLoggedIn: () => void
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
         />
-        <TextField
+        <PasswordField
           id="login-password"
           label="비밀번호"
-          type="password"
           placeholder="비밀번호 입력"
           autoComplete="current-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onValue={setPassword}
         />
         <ErrorText>{error}</ErrorText>
         <PrimaryButton type="submit" loading={loading} className="mt-2 w-full">
           로그인
         </PrimaryButton>
-        <p className="m-0 flex items-center justify-center gap-1 text-sm text-muted">
-          아직 회원증이 없나요?
-          <TextButton onClick={onSignup} className="font-bold">
-            회원가입
-          </TextButton>
-        </p>
+        <div className="flex flex-col">
+          <p className="m-0 flex items-center justify-center gap-1 text-sm text-muted">
+            닉네임이나 비밀번호를 잊었나요?
+            <TextButton onClick={onForgot} className="font-bold">
+              찾기
+            </TextButton>
+          </p>
+          <p className="m-0 flex items-center justify-center gap-1 text-sm text-muted">
+            아직 회원증이 없나요?
+            <TextButton onClick={onSignup} className="font-bold">
+              회원가입
+            </TextButton>
+          </p>
+        </div>
       </form>
 
       <div className="min-h-10 flex-1" />
-      <BookShelf scale={0.9} />
+      <div className="lg:hidden">
+        <BookShelf scale={0.9} />
+      </div>
     </Screen>
   )
 }

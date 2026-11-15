@@ -24,15 +24,15 @@ export default function RejectSheet({
   const toggle = (r: string) => setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center">
+    <div className="fixed inset-0 z-50 flex justify-center lg:items-center">
       <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-ink/40" />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-title"
-        className="absolute bottom-0 flex w-full max-w-[420px] flex-col gap-5 rounded-t-3xl bg-paper px-5 pt-3 pb-6 font-sans text-ink"
+        className="absolute bottom-0 flex w-full max-w-[420px] flex-col gap-5 rounded-t-3xl bg-paper px-5 pt-3 pb-6 font-sans text-ink lg:relative lg:bottom-auto lg:max-w-[520px] lg:rounded-3xl lg:px-7 lg:pt-6 lg:pb-7"
       >
-        <div aria-hidden="true" className="h-1 w-10 self-center rounded-full bg-line-strong" />
+        <div aria-hidden="true" className="h-1 w-10 self-center rounded-full bg-line-strong lg:hidden" />
         <div className="flex flex-col gap-1.5">
           <h2 id="reject-title" className="m-0 font-serif text-xl font-bold text-teal-deep">
             어떤 점이 아쉬웠나요?

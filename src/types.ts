@@ -50,36 +50,25 @@ export interface PersonaResult {
 }
 
 // ---------- 실험실 (카톡 분석) ----------
-export type LabStatusValue =
-  | 'waiting_email'
-  | 'verifying_identity'
-  | 'verified'
-  | 'analyzing'
-  | 'completed'
-  | 'rejected'
-  | 'failed'
-  | 'expired'
+export type LabStatusValue = 'waiting_upload' | 'analyzing' | 'completed' | 'failed' | 'expired' | 'cancelled'
 
 /** POST /lab/sessions 응답 */
 export interface LabSession {
   upload_id: string
-  upload_code: string
-  recipient_email: string
-  mail_subject: string
   target_name: string
   status: LabStatusValue
+  upload_url?: string
+  max_bytes?: number
   expires_at?: string
   poll_interval_seconds?: number
 }
 
-/** GET /lab/sessions/{upload_id}/status 응답 */
+/** GET /lab/sessions/{upload_id}/status 응답 (POST .../file 응답도 같은 모양) */
 export interface LabStatus {
   upload_id: string
   status: LabStatusValue
-  email_received: boolean
-  filename?: string | null
-  identity: { matched: boolean | null; verification: string; result?: string }
-  analysis: { analysis_id: string | null; status: string; model?: string }
+  file_received: boolean
+  analysis: { analysis_id: string | null; status: string; model?: string; started_at?: string | null }
   message?: string
   error?: { code: string; message: string }
 }
@@ -120,6 +109,8 @@ export interface MapSeat extends Box {
   seatId: string
   label: string | null
   verification: 'verified' | 'unverified'
+  deskType?: string
+  tags?: string[]
 }
 
 export interface Facility {
@@ -139,6 +130,10 @@ export interface RoomMap {
   verification: 'verified' | 'unverified'
   seats: MapSeat[]
   facilities: Facility[]
+  displayName?: string
+  libraryName?: string
+  roomName?: string
+  laptopAllowed?: boolean
 }
 
 export type SeatStateValue = 'available' | 'occupied' | 'reserved' | 'blocked' | 'unknown'
@@ -181,9 +176,220 @@ export interface Recommendation {
     warnings: string[]
   }
   displayNames: Record<string, string>
+  room?: RoomSummary
+  model?: { version: string; historySessions: number; profileSources: string[]; availabilitySource: string }
 }
 
 export type RecommendationEvent =
   | { type: 'recommendationExposed'; visibleTargetIds: string[] }
   | { type: 'candidateSelected'; targetId: string; origin: 'recommendation' | 'outsideRecommendations' }
   | { type: 'candidateRejected'; targetId: string; reason: string; excludeFromFuture: boolean }
+  | { type: 'useConfirmed'; targetId: string }
+  | { type: 'useEnded'; targetId: string }
+  | { type: 'ratingSubmitted'; targetId: string; rating: number; comment?: string }
+// ---------- 도서관·열람실 ----------
+export interface OpeningToday {
+  today: string | null
+  openNow: boolean
+  closedToday: boolean
+  virtual: boolean
+}
+
+export interface LibrarySummary {
+  libraryId: string
+  name: string
+  address: string | null
+  region: string
+  roomCount: number
+  totalSeats: number
+  remainingSeats: number
+  openNow: boolean
+  todayHours: string | null
+  laptopRooms: number
+}
+
+export interface RoomSummary {
+  roomId: string
+  libraryId: string
+  name: string
+  floor: string | null
+  totalSeats: number
+  remainingSeats: number
+  laptopAllowed: boolean
+  laptopRuleSource: 'official' | 'virtual'
+  hours: OpeningToday
+  seatRecommendation: boolean
+}
+
+/** 사용자가 고른 열람실(브라우저에 저장) */
+export interface SelectedRoom {
+  roomId: string
+  libraryId: string
+  libraryName: string
+  roomName: string
+}
+
+export interface RoomRecommendationResult {
+  rank: number
+  targetType: 'room'
+  roomId: string
+  libraryId: string
+  libraryName: string
+  roomName: string
+  score: number
+  reasons: Reason[]
+  room: RoomSummary
+  bestSeats: { seatId: string; name: string }[]
+}
+
+export interface RoomRecommendation {
+  outcome: 'ranked' | 'noCandidates'
+  results: RoomRecommendationResult[]
+  profileSources: string[]
+  warnings: string[]
+}
+
+// ---------- 내 취향 ----------
+export interface PreferenceChoice {
+  value: string
+  label: string
+}
+
+export interface PreferenceCatalogItem {
+  featureId: string
+  label: string
+  choices: PreferenceChoice[]
+}
+
+export interface PreferenceItem {
+  featureId: string
+  choice: string
+  importance: 1 | 2 | 3
+}
+
+export interface Preferences {
+  revision: number
+  updatedAt: string | null
+  items: PreferenceItem[]
+  laptopRequired: boolean | null
+  catalog: PreferenceCatalogItem[]
+  effective: {
+    sources: string[]
+    laptopRequired: boolean
+    preferences: { featureId: string; label: string; target: number; importance: number; source: string }[]
+  }
+}
+
+export interface InsightItem {
+  featureId: string
+  label: string
+  direction: 'high' | 'low'
+  z: number
+  confidence: number
+  status: 'learned' | 'neutral' | 'insufficientData'
+  summary: string
+  evidence: { observations: number; chosenRate: number; availableRate: number; higherCount: number }
+  text: string
+}
+
+export interface Insights {
+  historySessions: number
+  modelVersion: string | null
+  items: InsightItem[]
+  profileSources: string[]
+  note: string
+}
+
+// ---------- 이용 기록 ----------
+export interface HistoryItem {
+  selectionId: number
+  recommendationId: string
+  seatId: string
+  seatName: string
+  roomId: string
+  roomName: string
+  libraryId: string
+  libraryName: string
+  origin: 'recommendation' | 'outsideRecommendations'
+  selectedAt: string
+  confirmedAt: string | null
+  endedAt: string | null
+  rating: number | null
+  status: 'active' | 'ended' | 'expired'
+  holdUntil: string | null
+}
+
+export interface History {
+  current: HistoryItem | null
+  items: HistoryItem[]
+  total: number
+}
+
+// ---------- 평면도·좌석 설명 ----------
+export interface PxBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+export type Pt = [number, number]
+
+export interface EdgeMarker {
+  point: Pt
+  outside: boolean
+  direction: [number, number]
+  wall?: string
+  real: boolean
+}
+
+export interface RoomFloor {
+  roomId: string
+  mapId: string
+  width: number
+  height: number
+  roomBounds: PxBox
+  pxPerMeter: number
+  seats: { seatId: string; label: string; box: PxBox; deskGroup: number; partition: boolean; deskOutlet: boolean }[]
+  deskGroups: { id: number; deskType: string; deskTypeLabel: string; box: PxBox; seatIds: string[]; partition: boolean; deskOutlet: boolean; size: string }[]
+  windows: { line: [Pt, Pt]; wall: string; blindClosed: boolean; view: string }[]
+  airConditioners: { point: Pt; kind: string; direction: [number, number] | null; reachPx: number; strength: number; strengthWord: string }[]
+  lights: { point: Pt; dim: boolean }[]
+  outlets: { point: Pt; kind: string }[]
+  entrances: EdgeMarker[]
+  toilets: EdgeMarker[]
+  libraryName: string
+  roomName: string
+  laptopAllowed: boolean
+  hours: OpeningToday
+  virtual: boolean
+}
+
+export interface SeatFact {
+  key: string
+  icon: string
+  title: string
+  value: string
+  detail: string
+  level: number | null
+  featureId: string | null
+}
+
+export interface SeatExplanation {
+  seatId: string
+  name: string
+  roomId: string
+  roomName: string
+  libraryName: string
+  rank: number | null
+  recommended: boolean
+  available: boolean
+  summary: string
+  reasons: { text: string; source: string; because: string; featureId?: string }[]
+  cautions: string[]
+  matches: { featureId: string; name: string; want: string; seat: string; verdict: 'good' | 'ok' | 'bad'; because: string }[]
+  facts: SeatFact[]
+  nearby: { type: string; text: string }[]
+  room: { laptopAllowed: boolean; hours: OpeningToday | null; deskType: string }
+  learning: { historySessions: number; text: string }
+  virtual: string
+}

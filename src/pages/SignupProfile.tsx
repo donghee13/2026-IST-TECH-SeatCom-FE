@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { ErrorText, LibraryCard, PageHeader, PrimaryButton, Screen, TextField, TopBar } from '../components/ui'
+import { ErrorText, LibraryCard, PageHeader, PasswordField, PrimaryButton, Screen, TextField, TopBar } from '../components/ui'
 
 /** 회원가입 1단계: 닉네임 + 비밀번호 (가입은 2단계 이메일 인증 뒤에 함) */
 export default function SignupProfile({
@@ -19,6 +19,10 @@ export default function SignupProfile({
     e.preventDefault()
     if (!nickname.trim() || !password) {
       setError('닉네임과 비밀번호를 입력해 주세요.')
+      return
+    }
+    if (password.length < 6) {
+      setError('비밀번호는 6자 이상으로 입력해 주세요.')
       return
     }
     setError('')
@@ -45,14 +49,14 @@ export default function SignupProfile({
           onChange={(e) => setNickname(e.target.value)}
           helper="로그인할 때 이 닉네임을 써요."
         />
-        <TextField
+        <PasswordField
           id="signup-password"
           label="비밀번호"
-          type="password"
-          placeholder="비밀번호 입력"
+          placeholder="6자 이상"
           autoComplete="new-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onValue={setPassword}
+          helper="방금 친 글자는 잠깐 그대로 보여 드려요."
         />
         <ErrorText>{error}</ErrorText>
       </form>

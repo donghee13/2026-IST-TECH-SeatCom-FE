@@ -6,8 +6,9 @@ import { Card, ErrorText, PageHeader, PrimaryButton, Screen, TextField } from '.
 
 const NOTICES = [
   { title: '쓰는 곳', text: '자리 추천에 쓸 성향 분석에만 써요.' },
-  { title: '보관', text: '대화 원본은 분석에만 쓰고, 분석 결과만 남아요.' },
-  { title: '상대방 대화', text: '대화에는 상대방의 말도 들어 있어요. 민감한 대화방은 피하고, 필요하면 개인정보를 지운 뒤 보내 주세요.' },
+  { title: '보관', text: '대화 파일은 서버에 저장하지 않아요. 메모리에서 분석한 뒤 바로 버리고, 분석 결과만 남아요.' },
+  { title: '상대방 대화', text: '대화에는 상대방의 말도 들어 있어요. 민감한 대화방은 피하고, 필요하면 개인정보를 지운 뒤 올려 주세요.' },
+  { title: 'AI 서버', text: '분석을 위해 대화를 AI 서버로 보내요. 이때 대화 참여자 이름은 가명으로 바꾸고, 이메일·링크·전화번호 같은 긴 숫자는 가려요.' },
   { title: '설문과 별도', text: '카톡 분석 결과는 설문 답변을 바꾸지 않고 따로 보여드려요.' },
 ]
 
@@ -42,7 +43,7 @@ export default function LabConsent({
     <Screen className="px-5 pt-3 pb-6">
       <LabHeader onBack={onBack} onLater={onBack} backLabel="메인으로 돌아가기" />
 
-      <PageHeader className="mt-5" eyebrow="실험실 · 카톡 대화 분석" title="보내기 전에 확인해 주세요" />
+      <PageHeader className="mt-5" eyebrow="실험실 · 카톡 대화 분석" title="올리기 전에 확인해 주세요" />
 
       <Card className="mt-6 px-4">
         <dl className="m-0 divide-y divide-line">

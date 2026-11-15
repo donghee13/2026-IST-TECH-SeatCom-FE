@@ -1,14 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getLabAnalysis } from '../api'
 import { LAB_FEATURE_LABEL, LAB_VALUE_LABEL } from '../data/options'
 import type { LabAnalysis, LabPreference } from '../types'
-import { Card, ErrorScreen, LoadingScreen, Notice, PageHeader, PrimaryButton, Screen } from '../components/ui'
+import { Card, ErrorScreen, ErrorText, LoadingScreen, Notice, PageHeader, PrimaryButton, Screen, SecondaryButton } from '../components/ui'
 
 /** 실험실: 카톡 대화 분석 결과 (설문 결과와 따로 보여줌) */
-export default function LabResult({ analysisId, onDone }: { analysisId: string; onDone: () => void }) {
+export default function LabResult({ analysisId, onDone, onReset }: { analysisId: string; onDone: () => void; onReset: () => Promise<void> }) {
   const [data, setData] = useState<LabAnalysis | null>(null)
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const resetPending = useRef(false)
+
+  async function resetAnalysis() {
+    if (resetPending.current) return
+    resetPending.current = true
+    setResetting(true)
+    setResetError('')
+    try {
+      await onReset()
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : '초기화하지 못했어요. 다시 시도해 주세요.')
+    } finally {
+      resetPending.current = false
+      setResetting(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -91,7 +109,12 @@ export default function LabResult({ analysisId, onDone }: { analysisId: string; 
       <p className="m-0 mt-4 text-xs leading-relaxed text-muted">AI가 대화로 추정한 결과예요. 설문 답변은 바뀌지 않고, 자리 추천에 참고로만 써요.</p>
 
       <div className="min-h-6 flex-1" />
-      <PrimaryButton onClick={onDone} className="w-full">
+      {resetError && <ErrorText>{resetError}</ErrorText>}
+      <p className="m-0 mb-3 text-center text-xs leading-relaxed text-muted">초기화하면 현재 카톡 분석 결과를 삭제하고 TXT 업로드부터 다시 시작해요. 설문 답변은 유지돼요.</p>
+      <SecondaryButton onClick={() => void resetAnalysis()} loading={resetting} className="mb-3 w-full">
+        {resetting ? '초기화 중…' : '분석 초기화'}
+      </SecondaryButton>
+      <PrimaryButton onClick={onDone} disabled={resetting} className="w-full">
         메인으로
       </PrimaryButton>
     </Screen>
